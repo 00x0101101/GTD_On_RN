@@ -1,45 +1,40 @@
-import { declareIndexPlugin, ReactRNPlugin, WidgetLocation } from '@remnote/plugin-sdk';
+import { declareIndexPlugin, PluginCommandMenuLocation, ReactRNPlugin, RemId } from '@remnote/plugin-sdk';
 import '../style.css';
 import '../App.css';
+import { GTD_PW_CODE } from './consts';
 
 async function onActivate(plugin: ReactRNPlugin) {
-  // Register settings
-  await plugin.settings.registerStringSetting({
-    id: 'name',
-    title: 'What is your Name?',
-    defaultValue: 'Bob',
-  });
 
-  await plugin.settings.registerBooleanSetting({
-    id: 'pizza',
-    title: 'Do you like pizza?',
-    defaultValue: true,
-  });
+    //init all the PWs
 
-  await plugin.settings.registerNumberSetting({
-    id: 'favorite-number',
-    title: 'What is your favorite number?',
-    defaultValue: 42,
-  });
+    //add the commands
+    await plugin.app.registerMenuItem({
+        id: "cgtd",
+        name: 'name',
+        location: PluginCommandMenuLocation.PropertyConfigMenu,
+        action: async (args: { rowIds: RemId[]; columnPropertyId: RemId }) => {
+            let actRem = await plugin.powerup.getPowerupSlotByCode(GTD_PW_CODE.GTD_ENGINE, GTD_PW_CODE.TREAT_AS);
 
-  // A command that inserts text into the editor if focused.
-  await plugin.app.registerCommand({
-    id: 'editor-command',
-    name: 'Editor Command',
-    action: async () => {
-      plugin.editor.insertPlainText('Hello World!');
-    },
-  });
+            // is the Column "Treat As"
+            if (args.columnPropertyId === actRem?._id) {
+                const allRows = (await plugin.rem.findMany(args.rowIds)) || [];
+                for(let rem in allRows)
+                {
 
-  // Show a toast notification to the user.
-  await plugin.app.toast("I'm a toast!");
+                }
+            }
+        },
+    });
 
-  // Register a sidebar widget.
-  await plugin.app.registerWidget('sample_widget', WidgetLocation.RightSidebar, {
-    dimensions: { height: 'auto', width: '100%' },
-  });
+    // Register a sidebar widget.
+    // await plugin.app.registerWidget('sample_widget', WidgetLocation.RightSidebar, {
+    //     dimensions: { height: 'auto', width: '100%' },
+    // });
+
+
 }
 
-async function onDeactivate(_: ReactRNPlugin) {}
+async function onDeactivate(_: ReactRNPlugin) {
+}
 
 declareIndexPlugin(onActivate, onDeactivate);
