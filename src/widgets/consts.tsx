@@ -6,7 +6,7 @@ const TICK_TYPE_PW_CODE={
   LOG:"tlog"
 }
 
-
+export  const itemGtdName = 'item_gtd';
 
 export const GTD_PW_CODE={
   TIME_TICK:"ttk",
@@ -18,4 +18,10 @@ export const GTD_PW_CODE={
   OWNER_PROJECT:"goprj",
   TREAT_AS:"gact",
   MESSAGE:"gmsg"
+}
+
+export declare class eventCombo{
+  slotSrc:string|undefined;
+  slotRef:string|undefined;
+  host:string|undefined
 }
