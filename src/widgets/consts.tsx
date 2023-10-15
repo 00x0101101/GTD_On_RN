@@ -22,6 +22,7 @@ const actOptions={
   SomeDay:"_wish",
   Reference:"_ref",
   WasteBin:"_bin",
+  Now:"_now"
 }
 const actContainerSlots={
   Later:"c_wait",
@@ -30,6 +31,7 @@ const actContainerSlots={
   SomeDay:"c_wish",
   Reference:"c_ref",
   WasteBin:"c_bin",
+  Now:"c_now"
 }
 
 
