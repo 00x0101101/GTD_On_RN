@@ -38,6 +38,7 @@ const actContainerSlots={
 export const ACT_OPTIONS_LOGGER_PW_CODE={
   ACT_PW:"gacto",
   CONTAINER_PW:"gactc",
+  CONTAINER_INTERFACE:"gactc_i",
   ACT_SLOTS:actOptions,
   CONTAIN_SLOTS:actContainerSlots
 }
@@ -77,4 +78,11 @@ export enum HostType{
 
 }
 
-export const GTD_HOST_PW="hgtd"
+export const GTD_HOST_PW="host_gtd"
+
+
+export const PW2SLOTS=new Map<string,Object>([
+    [GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS],
+    [ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS],
+    [ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS]
+])

@@ -3,7 +3,7 @@
   "id": "plugin_template",
   "name": "Plugin Template",
   "author": "remnote",
-  "repoUrl": "",
+  "repoUrl": "https://github.com/00x0101101/GTD_On_RN",
   "version": {
     "major": 0,
     "minor": 0,
@@ -16,7 +16,7 @@
   "requiredScopes": [
     {
       "type": "All",
-      "level": "ReadCreateModify"
+      "level": "ReadCreateModifyDelete"
     }
   ]
 }

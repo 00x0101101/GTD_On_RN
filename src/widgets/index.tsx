@@ -1,12 +1,14 @@
-import { AppEvents, declareIndexPlugin, PluginCommandMenuLocation, ReactRNPlugin, RemId } from '@remnote/plugin-sdk';
+import { declareIndexPlugin, ReactRNPlugin } from '@remnote/plugin-sdk';
 import '../style.css';
 import { init_PowerUps } from './init_PowerUps';
+
 // import '../App.css';
 
 
 async function onActivate(plugin: ReactRNPlugin) {
 
     // init all the PWs
+
     let r=await init_PowerUps(plugin);
     if(!r){
         await plugin.app.toast("Init Failed- GTD...")
@@ -18,13 +20,11 @@ async function onActivate(plugin: ReactRNPlugin) {
 
 
     // Test Block
-    // await plugin.event.addListener(AppEvents.RemChanged,"RFOHXniJ4C0dE8QOu",()=>{
-    //     console.warn("remChanged...")
-    // })
-    //console.warn((await plugin.rem.findOne("BkKMBXZW9nXuAg0Uk"))?.taggedRem())
-
-    // let igtd=await plugin.powerup.getPowerupByCode(itemGtdName);
-
+    // let r=await plugin.rem.findOne("2ZfIFmjNhWbcIIBdm")
+    // if(r)
+    // {
+    //     await plugin.app.toast(String((await r.getPortalType())+"???" ))
+    // }
 
     // // add slash command to add "GTD Engine" Tag
     // await plugin.app.registerCommand({
