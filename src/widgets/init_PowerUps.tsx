@@ -17,7 +17,7 @@ import {
     HostCheckResult,
     HostType,
     PW2SLOTS,
-    TIME_TK_PW_CODE,
+    TIME_TK_PW_CODE, TTK_LOGGER_PW_CODE,
 } from './consts';
 import moment from 'moment';
 
@@ -108,34 +108,27 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     gtdContainerInterface?.setIsDocument(true)
     // gtdContainerInterface?.setText(["GTD Containers"])
-    const supplyHostPropertyValue=async (host:Rem,slot:Rem,options:HostType)=>{
-        const back=await slot.taggedRem()
-        if(back&&back.length===1)
-            return;
-        if(back.length>1)
-            for(let ba of back)
-            {
-                if(ba.parent!==slot._id)
-                    await ba.removeTag(slot._id)
-            }
-        const property = await plugin.rem.createRem();
-        options===HostType.CONTAINER ? property && gtdContainerInterface && await property.setParent(gtdContainerInterface) : (await property?.setParent(host._id), await host.addTag(slot))
-        slot.text &&  await property?.setText([(await plugin.richText.toString(slot.text))+"  P"]);
-        await property?.setIsProperty(options===HostType.SLOT)
-        return property
-        //await slot.setBackText(await plugin.richText.rem(host).value())
-    }
 
-    const supplyHostPropertyVal=async (host:Rem,pwCode:string,slotCode:string,options:HostType)=>{
-        const slot=await plugin.powerup.getPowerupSlotByCode(pwCode,slotCode)
+    /**
+     * Apply the properties of pwCode & slotCode to the host
+     * @param host
+     * @param pwCode the code of powerUp as the template of hosts
+     * @param slotCode the PW slot code or option Rem as the tagger of the properties of the host
+     * @param options
+     */
+    const supplyHostPropertyVal=async (host:Rem,pwCode:string,slotCode:string|Rem,options:HostType)=>{
+
+        const slot=(typeof slotCode==="string") ? await plugin.powerup.getPowerupSlotByCode(pwCode,slotCode): slotCode
+
         if(!slot)
         {
             await plugin.app.toast("slot not found...")
             return
         }
         const back=await slot.taggedRem()
-        const slotEnums=await slot.children
-        const norm=1+(slotEnums?.length||0)
+        // const slotEnums=await slot.children
+        // const norm=1+(slotEnums?.length||0)
+        const norm=1
         if(back&&back.length===norm)
             return;
         if(back.length>norm)
@@ -145,8 +138,17 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                     await ba.removeTag(slot._id)
             }
         const property = await plugin.rem.createRem();
-        options===HostType.CONTAINER ? property && gtdContainerInterface && await property.setParent(gtdContainerInterface) : (await property?.setParent(host._id), await host.addTag(slot))
-        slot.text &&  await property?.setText([(await plugin.richText.toString(slot.text))]);
+        if(options===HostType.CONTAINER)
+        {
+            property && gtdContainerInterface && await property.setParent(gtdContainerInterface)
+
+        }
+        else{
+            await property?.setParent(host);
+
+        }
+        await property?.addTag(slot)
+        slot.text &&  await property?.setText(slot.text);
         await property?.setIsProperty(options===HostType.SLOT)
 
         return property
@@ -158,12 +160,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         const slotCodesArr=slotCodesObj && Object.entries(slotCodesObj)
         if(!logger)return
         let slots=await logger.getChildrenRem()
-
-        // if(!slots)return
-        // for(let slot of slots)
-        // {
-        //     await supplyHostPropertyValue(host,slot,HostType.SLOT)
-        // }
         if(!slotCodesArr)return
         for(let slotCode of slotCodesArr)
         {
@@ -185,7 +181,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     utils={
         hostUniqueCheck:hostUniqueCheck,
         hostUniqueRectify:hostUniqueRectify,
-        supplyHostPropertyValue:supplyHostPropertyValue,
+        supplyHostPropertyValue:supplyHostPropertyVal,
         genHostPropertiesWithLog:genHostPropertiesWithLog,
         getHostRemOf:getHostRemOf,
         getAllPropOf:getAllPropOf,
@@ -205,8 +201,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     });
     //endregion
 
-
-
     //region Init the GTD Logger PW
     const gtd_logger_slot_list=Object.entries(GTD_LOGGER_PW_CODE.LOGGER_SLOTS)
     let gtdSlots: any[][] = [
@@ -218,9 +212,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TREAT_AS, 'TREAT_AS',PropertyLocation.RIGHT, PropertyType.SINGLE_SELECT, SelectSourceType.Enum,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.MESSAGE, 'MESSAGE',PropertyLocation.ONLY_DOCUMENT, PropertyType.TEXT,undefined],
     ];
-
-
-
     await plugin.app.registerPowerup('GTD Engine', GTD_LOGGER_PW_CODE.LOGGER_PW,
         "A PowerUp marking up the properties under the host of the PowerUp tag 'GTD Engine Host' ", {
         slots: gtdSlots.map(slot => {
@@ -232,25 +223,10 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 propertyType: slot[3],
                 propertyLocation:slot[2],
                 selectSourceType:slot[4],
-                enumValues:slot[5] as Record<string,string>
+                enumValues:slot[5] //as Record<string,string>
             }
         }),
     });
-
-
-    // await plugin.app.registerPowerup("GTD Engine",GTD_LOGGER_PW_CODE.LOGGER_PW,
-    //     "A PowerUp marking up the properties under the host of the PowerUp tag 'GTD Engine Host' "
-    //     , {
-    //         slots:gtd_logger_slot_list.map((r)=> {
-    //             return {
-    //                 code:r[1],
-    //                 name:r[0],
-    //                 hidden:true,
-    //                 onlyProgrammaticModifying:true,
-    //             }
-    //         })
-    //     })
-
     //endregion
 
     //region Init the Action Type Logger PW and Container PW
@@ -262,7 +238,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 return{
                     code:r[1],
                     name:r[0],
-                    hidden:true,
+                    hidden:false,
                     onlyProgrammaticModifying:true,
                 }
             })
@@ -274,14 +250,11 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 return{
                     code:"c"+r[1],
                     name:r[0],
-                    hidden:true,
+                    hidden:false,
                     onlyProgrammaticModifying:true,
                 }
             })
         })
-
-
-
     //endregion
 
     //region Init host attaching PW
@@ -295,9 +268,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const gtd_host_pw=await plugin.powerup.getPowerupByCode(GTD_HOST_PW)
     const date_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.THE_DATE)
     const tick_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIME_TICK)
-
     const tlkPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE)
-    //const waitLContainerPW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Later)
+    // const waitLContainerPW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Later)
     // region Init GTD host
 
     if(!gtd_host_pw||!date_host_pw||!tick_host_pw||!tlkPW){
@@ -311,27 +283,41 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     await hostUniqueRectify(GTD_HOST_PW,GTD_LOGGER_PW_CODE.LOGGER_PW)
     // endregion
 
-    //region Init GTD actions
     const treat_as_slot=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TREAT_AS)
     const act_slot_host=treat_as_slot&& await getHostRemOf(treat_as_slot)
     const acts_with_container=new Set([ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS.Delegate])
+
+    //region Init GTD actions
     if(act_slot_host)
     {
         for(const act of act_logger_slotCode_list)
         {
-            let slot=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1])
-            if(!slot)continue
-            //const p=await supplyHostPropertyValue(act_slot_host,slot,HostType.OPTIONS)
-            const p=await supplyHostPropertyVal(act_slot_host,ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1],HostType.OPTIONS)
+            let option=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1])
+            if(!option)continue
+            await supplyHostPropertyVal(act_slot_host,ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1],HostType.OPTIONS)
 
             let container_slot=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,"c"+act[1])
-            if(!(p&&container_slot))continue;
-            //await supplyHostPropertyValue(act_slot_host,container_slot,HostType.CONTAINER)
+            if(!(container_slot))continue;
             await supplyHostPropertyVal(act_slot_host,ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,"c"+act[1],HostType.CONTAINER)
 
         }
     }
 
+    //endregion
+
+    const timeLineTypeHost=await getHostRemOf(tlkPW)
+    const gtdHost=await getHostRemOf(gtd_host_pw)
+    const dateHost=await getHostRemOf(date_host_pw)
+    const tickHost=await getHostRemOf(tick_host_pw)
+
+
+    //region register options of TickType_Slot under the host
+    const ttkTypeSlot=Object.entries(TIME_TK_PW_CODE.TICK_TYPE)
+    const ttkTypeOptions=await tlkPW.getChildrenRem()
+    for(const ttkTypeOpt of ttkTypeOptions)
+    {
+        await supplyHostPropertyVal(timeLineTypeHost,"",ttkTypeOpt,HostType.OPTIONS)
+    }
     //endregion
 
     //region Init Commands
@@ -345,12 +331,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
     })
     //endregion
-
-
-    const gtdHost=await getHostRemOf(gtd_host_pw)
-    const dateHost=await getHostRemOf(date_host_pw)
-    const tickHost=await getHostRemOf(tick_host_pw)
-    const timeLineTypeHost=await getHostRemOf(tlkPW)
 
     //region Init event listeners
 
@@ -567,9 +547,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
 
     //endregion
-
-
-
 
     return gtdHost && [gtdHost, await plugin.rem.createTable(gtdHost)];
 }
