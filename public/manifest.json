@@ -1,7 +1,7 @@
 {
   "manifestVersion": 1,
-  "id": "plugin_template",
-  "name": "Plugin Template",
+  "id": "gtd_on_RN",
+  "name": "GTD workflow enhancement",
   "author": "remnote",
   "repoUrl": "https://github.com/00x0101101/GTD_On_RN",
   "version": {
