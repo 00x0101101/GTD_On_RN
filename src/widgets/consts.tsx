@@ -45,6 +45,7 @@ const tickType={
   LOG:"LogTick"
 }
 export const TIME_TK_PW_CODE =  {
+  //power code representing for "Time Tick" to tag time stamps.
   TICK_PW:"time_tick",
   TICK_SLOT:"tkty",
   TICK_TYPE:tickType

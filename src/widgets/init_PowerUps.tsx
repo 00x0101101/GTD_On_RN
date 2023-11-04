@@ -17,14 +17,31 @@ import {
     HostCheckResult,
     HostType,
     PW2SLOTS,
-    TIME_TK_PW_CODE, TTK_LOGGER_PW_CODE,
+    TIME_TK_PW_CODE,
 } from './consts';
 import moment from 'moment';
 
 let utils
 
-export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
+const allKeyObj=(obj:{[key:string]:string})=>{
+    return Object.keys(obj).reduce((acc,key)=>{
+        // @ts-ignore
+        acc[key]=key;
+        return acc;
+    },{} as {[key:string]:string})
+}
+
+
+const reverseObj=(obj:{[key:string]:string})=>{
+    return Object.keys(obj).reduce((acc,key)=>{
+        // @ts-ignore
+        acc[obj[key]]=key;
+        return acc;
+    },{} as {[key:string]:string})
+}
+
+export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const hostUniqueCheck=async (pw:Rem)=>{
         //const pw=await plugin.powerup.getPowerupByCode(pwCode)
         if(!pw)return HostCheckResult.PW_NOT_EXIST;
@@ -33,7 +50,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         if(hostList.length>1)return HostCheckResult.HOST_NOT_UNIQUE
         if(hostList.length===1)return HostCheckResult.HOST_UNIQUE
     }
-
     const hostUniqueRectify=async (pwCode:string,loggerCode:string)=>{
         const pw=await plugin.powerup.getPowerupByCode(pwCode);
         if(!pw)return
@@ -72,42 +88,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 break;
         }
     }
-    const sidebar = await plugin.powerup.getPowerupByCode(BuiltInPowerupCodes.DocumentSidebar);
-    if(!sidebar) return
-    const addToSidebar=async (r:Rem,portalLikeLink?:Rem|undefined,linkIsPortal?:boolean)=>{
-        await r.setIsDocument(true)
-        let tag= (!portalLikeLink)||!!linkIsPortal
-        portalLikeLink= portalLikeLink || await plugin.rem.createPortal()
-        if(sidebar&&portalLikeLink)
-        {
-            if(tag)
-            await r.addToPortal(portalLikeLink)
-            await portalLikeLink.setParent(sidebar)
-        }
-
-    }
-
-
-
-    // a rem to show all the container rems of GTD engine
-   await plugin.app.registerPowerup("GTD Containers Panel",ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE,
-        "a rem to show all the container rems of GTD engine" ,{slots:[]})
-   const gtdContainerInterface=await plugin.powerup.getPowerupByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE)
-
-
-    if(gtdContainerInterface&&(!(await gtdContainerInterface.remsReferencingThis()).length|| (((await gtdContainerInterface.remsReferencingThis())[0].parent)!==sidebar?._id) ))
-    {
-        const gtdContainerInterfaceRef=await plugin.rem.createRem()
-        if(gtdContainerInterfaceRef)
-        {
-            await gtdContainerInterfaceRef.setText(await plugin.richText.rem(gtdContainerInterface).value())
-            await gtdContainerInterfaceRef.setParent(sidebar?._id)
-            await addToSidebar(gtdContainerInterface)
-        }
-    }
-
-    gtdContainerInterface?.setIsDocument(true)
-    // gtdContainerInterface?.setText(["GTD Containers"])
 
     /**
      * Apply the properties of pwCode & slotCode to the host
@@ -153,24 +133,42 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         return property
     }
-
-    const genHostPropertiesWithLog =async (host:Rem,loggerCode:string) => {
-        const logger=await plugin.powerup.getPowerupByCode(loggerCode);
-        const slotCodesObj=PW2SLOTS.get(loggerCode)
-        const slotCodesArr=slotCodesObj && Object.entries(slotCodesObj)
-        if(!logger)return
-        let slots=await logger.getChildrenRem()
-        if(!slotCodesArr)return
-        for(let slotCode of slotCodesArr)
+    const genHostPropertiesWithLog =async (host:Rem,loggerLike:string|Rem,hType=HostType.SLOT,optSet:any=undefined) => {
+        if(hType===HostType.SLOT)
         {
-            await supplyHostPropertyVal(host,loggerCode,slotCode[1],HostType.SLOT)
+            if(typeof loggerLike!=="string")return
+            const logger=await plugin.powerup.getPowerupByCode(loggerLike);
+            const slotCodesObj=PW2SLOTS.get(loggerLike)
+            const slotCodesArr=slotCodesObj && Object.entries(slotCodesObj)
+            if(!(logger&&slotCodesArr))return
+            for(let slotCode of slotCodesArr)
+            {
+                await supplyHostPropertyVal(host,loggerLike,slotCode[1],hType)
+            }
+        }
+        else if(hType===HostType.OPTIONS)
+        {
+            if(typeof loggerLike==="string"||!optSet)return
+            let slotLikes=await loggerLike.getChildrenRem()
+            for(const opt of slotLikes)
+            {
+
+                if(opt.text)
+                {
+                    const text=await plugin.richText.toString(opt.text)
+                    if((text in optSet))
+                    {
+                        await supplyHostPropertyVal(host,"",opt,HostType.OPTIONS)
+
+                    }
+                }
+            }
         }
     }
 
     const getHostRemOf=async (pw:Rem)=>{
         return (await pw.taggedRem())[0]
     }
-
     const getAllPropOf=async (tagRem:Rem|undefined)=>{
         let children= await tagRem?.getChildrenRem()
         return children && await filterAsync(children,c=>c.isProperty())
@@ -187,6 +185,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         getAllPropOf:getAllPropOf,
     }
 
+    //region Init PowerUps
 
     //region Init the TimeTick PW
     await plugin.app.registerPowerup('Time Tick', TIME_TK_PW_CODE.TICK_PW, 'The powerUp to tag the time ticks, mainly used in DailyDocs', {
@@ -194,7 +193,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             code: TIME_TK_PW_CODE.TICK_SLOT,
             name: 'TickType',
             onlyProgrammaticModifying: true,
-            hidden: false,
+            hidden: true,
+            propertyLocation:PropertyLocation.BELOW,
             enumValues:TIME_TK_PW_CODE.TICK_TYPE,
             defaultEnumValue:TIME_TK_PW_CODE.TICK_TYPE.LOG
         }]
@@ -204,12 +204,13 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     //region Init the GTD Logger PW
     const gtd_logger_slot_list=Object.entries(GTD_LOGGER_PW_CODE.LOGGER_SLOTS)
     let gtdSlots: any[][] = [
+        //USAGE: "THE_DATE" cannot be multiselect, or another GTD item needed to be created
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.THE_DATE, 'THE_DATE',PropertyLocation.BELOW, PropertyType.DATE,undefined,undefined],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIME_TICK, 'TIME_TICK',PropertyLocation.ONLY_DOCUMENT, PropertyType.MULTI_SELECT,SelectSourceType.Relation,undefined],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.SCENARIO, 'SCENARIO',PropertyLocation.BELOW , PropertyType.TEXT,undefined,undefined],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE, 'TIMELINE_TYPE',PropertyLocation.BELOW, PropertyType.SINGLE_SELECT,SelectSourceType.Enum,TIME_TK_PW_CODE.TICK_TYPE],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_PROJECT, 'OWNER_PROJECT',PropertyLocation.BELOW, PropertyType.SINGLE_SELECT,SelectSourceType.AnyRem,undefined],
-        [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TREAT_AS, 'TREAT_AS',PropertyLocation.RIGHT, PropertyType.SINGLE_SELECT, SelectSourceType.Enum,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS],
+        [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TREAT_AS, 'TREAT_AS',PropertyLocation.RIGHT, PropertyType.SINGLE_SELECT, SelectSourceType.Enum,allKeyObj(ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS)],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.MESSAGE, 'MESSAGE',PropertyLocation.ONLY_DOCUMENT, PropertyType.TEXT,undefined],
     ];
     await plugin.app.registerPowerup('GTD Engine', GTD_LOGGER_PW_CODE.LOGGER_PW,
@@ -218,8 +219,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             return  {
                 code: slot[0],
                 name: slot[1],
-                hidden: false,
-                onlyProgrammaticModifying: false,
+                hidden: true,
+                onlyProgrammaticModifying: true,
                 propertyType: slot[3],
                 propertyLocation:slot[2],
                 selectSourceType:slot[4],
@@ -231,18 +232,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     //region Init the Action Type Logger PW and Container PW
     const act_logger_slotCode_list=Object.entries(ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS)
-    await plugin.app.registerPowerup("GTD Actions",ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,
-        "A PowerUp marking up the option Rems of 'Treat As', handling related event listeners",
-        {
-            slots:act_logger_slotCode_list.map((r)=>{
-                return{
-                    code:r[1],
-                    name:r[0],
-                    hidden:false,
-                    onlyProgrammaticModifying:true,
-                }
-            })
-        })
+
     await plugin.app.registerPowerup("GTD Act Containers",ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,
         "A PowerUp marking up the receiver Rems of 'Treat As', containing Rems marshalled by decisions made with GTD",
         {
@@ -265,11 +255,60 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         })
 
     //endregion
+
+    //region Init interface panel PW in sidebar
+    // a rem to show all the container rems of GTD engine
+    await plugin.app.registerPowerup("GTD Containers Panel",ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE,
+        "a rem to show all the container rems of GTD engine" ,{slots:[]})
+    //endregion
+
+    //endregion
+
+    const sidebar = await plugin.powerup.getPowerupByCode(BuiltInPowerupCodes.DocumentSidebar);
+    if(!sidebar) return
+    /**
+     * add a rem to sidebar, within a portal or move it to sidebar directly
+     * @param r the rem added to sidebar within a portal
+     * @param portalLikeLink portal or other rems that is directly in the sidebar
+     * @param linkIsPortal assign whether "portalLikeLink" is a portal explicitly
+     */
+    const addToSidebar=async (r:Rem,portalLikeLink?:Rem|undefined,linkIsPortal?:boolean)=>{
+
+        let tag= (!portalLikeLink)||!!linkIsPortal
+        portalLikeLink= portalLikeLink || await plugin.rem.createPortal()
+        if(sidebar&&portalLikeLink)
+        {
+            if(tag)
+            {
+                await r.setIsDocument(true)
+                await r.addToPortal(portalLikeLink)
+            }
+            await portalLikeLink.setParent(sidebar)
+        }
+
+    }
+
     const gtd_host_pw=await plugin.powerup.getPowerupByCode(GTD_HOST_PW)
     const date_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.THE_DATE)
     const tick_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIME_TICK)
     const tlkPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE)
     // const waitLContainerPW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Later)
+
+    //region Init container Interface(GTD Panel in sidebar)
+    const gtdContainerInterface=await plugin.powerup.getPowerupByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE)
+    if(gtdContainerInterface&&(!(await gtdContainerInterface.remsReferencingThis()).length|| (((await gtdContainerInterface.remsReferencingThis())[0].parent)!==sidebar?._id) ))
+    {
+        const gtdContainerInterfaceRef=await plugin.rem.createRem()
+        if(gtdContainerInterfaceRef)
+        {
+            await gtdContainerInterfaceRef.setText(await plugin.richText.rem(gtdContainerInterface).value())
+            await gtdContainerInterfaceRef.setParent(sidebar?._id)
+            await addToSidebar(gtdContainerInterface)
+        }
+    }
+    gtdContainerInterface?.setIsDocument(true)
+    //endregion
+
     // region Init GTD host
 
     if(!gtd_host_pw||!date_host_pw||!tick_host_pw||!tlkPW){
@@ -285,16 +324,18 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     const treat_as_slot=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TREAT_AS)
     const act_slot_host=treat_as_slot&& await getHostRemOf(treat_as_slot)
-    const acts_with_container=new Set([ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS.Delegate])
+    if(!(treat_as_slot&&act_slot_host))return
 
-    //region Init GTD actions
+    //region Init GTD action hosts and corresponding containers
+
     if(act_slot_host)
     {
+        await genHostPropertiesWithLog(act_slot_host,treat_as_slot,HostType.OPTIONS,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS)
         for(const act of act_logger_slotCode_list)
         {
-            let option=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1])
-            if(!option)continue
-            await supplyHostPropertyVal(act_slot_host,ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1],HostType.OPTIONS)
+            // let option=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1])
+            // if(!option)continue
+            // await supplyHostPropertyVal(act_slot_host,ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1],HostType.OPTIONS)
 
             let container_slot=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,"c"+act[1])
             if(!(container_slot))continue;
@@ -310,14 +351,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const dateHost=await getHostRemOf(date_host_pw)
     const tickHost=await getHostRemOf(tick_host_pw)
 
-
     //region register options of TickType_Slot under the host
-    const ttkTypeSlot=Object.entries(TIME_TK_PW_CODE.TICK_TYPE)
-    const ttkTypeOptions=await tlkPW.getChildrenRem()
-    for(const ttkTypeOpt of ttkTypeOptions)
-    {
-        await supplyHostPropertyVal(timeLineTypeHost,"",ttkTypeOpt,HostType.OPTIONS)
-    }
+    await genHostPropertiesWithLog(timeLineTypeHost,tlkPW,HostType.OPTIONS,reverseObj(TIME_TK_PW_CODE.TICK_TYPE))
     //endregion
 
     //region Init Commands
@@ -330,12 +365,46 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             focus?.addTag(gtdHost)
         }
     })
+    await plugin.app.registerCommand({
+        quickCode:"stamp",
+        id:"tag_as_timestamp",
+        name:"Tag as Timestamp",
+        description:"Tag the rem as a Time Stamp('#TimeTick' in this rem)",
+        action:async ()=>{
+            const focus=await plugin.focus.getFocusedRem()
+            focus?.addTag(tickHost)
+        }
+
+    })
+
     //endregion
 
-    //region Init event listeners
+    //region Functions to process GTD panel in sidebar
 
+    /**
+     * move GTD item "r" into one container rem in the Container Panel
+     *
+     * (collect, contain and complete the GTD items to become the conqueror of our daily issue \^_\^ )
+     * @param r GTD items to contain
+     * @param containerCode the code specifying the container rem
+     */
+    const getContained = async (r:Rem,containerCode:string) => {
+        const containerPW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,containerCode);
+        if(!containerPW)return;
+        const container=await getHostRemOf(containerPW)
+        container && await r.setParent(container);
+    }
+    // literally.
+    const createPortalFor=async (r:Rem)=>{
+        const portal=await plugin.rem.createPortal();
+        if(!portal)return;
+        await r.addToPortal(portal);
+        return portal;
+    }
+    //endregion
 
-    async function setupStamp(daily:Rem|undefined,stampRichText:RichTextInterface) {
+    //region Functions to process time-related things, like stamps and ticks
+    async function setupStampWithRichText(daily:Rem|undefined,stampRichText:RichTextInterface) {
         if (!(daily)) {
             await plugin.app.toast('Failed to Locate Dairy');
             return;
@@ -352,8 +421,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         await stamp.addPowerup(TIME_TK_PW_CODE.TICK_PW);
         return stamp;
     }
-
-    const createStamp=async (date:Date|undefined)=>{
+    const createStampWithDate=async (date:Date|undefined)=>{
         date=date||new Date();
         let mo=moment(date);
 
@@ -361,43 +429,82 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         let stampRichText=await plugin.richText.text(stampText).value();
         let daily=await plugin.date.getDailyDoc(date);
 
-        return await setupStamp(daily,stampRichText);
+        return await setupStampWithRichText(daily,stampRichText);
     }
 
-
-    const getContained = async (r:Rem,containerCode:string) => {
-        const containerPW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,containerCode);
-        if(!containerPW)return;
-        const container=await getHostRemOf(containerPW)
-        container && await r.setParent(container);
+    /**
+     * get the property specified by "propertyId" of the rem "r" and return it as "type"
+     * @param r
+     * @param propertyId
+     * @param type
+     * @return
+     *
+     * when the property to return does not contain a reference, the param "type" will be ignored and the plain text itself will be returned.
+     *
+     * when `type==="Rem"` and the property to return contains a reference, but the Rem cannot be found (e.g. Privacy Rem or Deleted Rem), the function will return this id despite the "type" parameter
+     */
+    async function getPropertyOfRemAsType(r:Rem,propertyId:string,type:"Rem"|"RemId"|"RichText"){
+        let propertyRichText=await r.getTagPropertyValue(propertyId)
+        let results:string[]=[];
+        if(type==="Rem")
+        {
+            results=await plugin.richText.getRemIdsFromRichText(propertyRichText)
+            const resultRems=await plugin.rem.findMany(results)
+            if(resultRems?.length)
+                return resultRems
+        }
+        if(type==="RemId")
+        {
+            if(results.length)
+                return results
+        }
+        return propertyRichText
     }
 
-    const createPortalFor=async (r:Rem)=>{
-        const portal=await plugin.rem.createPortal();
-        if(!portal)return;
-        await r.addToPortal(portal);
-        return portal;
+    /**
+     * get the  RemIds  "THE_DATE" property of a GTD item refers to.
+     *
+     * In ideal condition the RemIds this function returns should be the id of a Daily Document(please check this if necessary)
+     * @param r the rem to query, tagged as a GTD item
+     */
+    async function getDateRemIdWithProperty(r:Rem):Promise<string[]>{
+        const defaultVal:string[]=[]
+        const result=await getPropertyOfRemAsType(r,dateHost._id,"RemId")
+        if(result.length>0 && (typeof (result[0]))==="string" && (typeof result) === (typeof defaultVal)) {
+            // @ts-ignore
+            return result;
+        }
+        else return defaultVal
+        // //add DDL (Sometimes with Time tick) and informing Date into corresponding DailyDoc
+        // let date=await r.getTagPropertyValue(dateHost._id);
+        // // let dateDoc=(dailyDocPW ?  await plugin.search.search(date,dailyDocPW,{numResults:1}):  await plugin.search.search(date))[0]
+        // return await plugin.richText.getRemIdsFromRichText(date);
     }
-
-    const getDailyDocIdWithProperty=async (r:Rem)=>{
-        //add DDL (Sometimes with Time tick) and informing Date into corresponding DailyDoc
-        let date=await r.getTagPropertyValue(dateHost._id);
-        // let dateDoc=(dailyDocPW ?  await plugin.search.search(date,dailyDocPW,{numResults:1}):  await plugin.search.search(date))[0]
-        return await plugin.richText.getRemIdsFromRichText(date);
-    }
-
+    /**
+     * link gtd item "r" to the daily doc the property "r.THE_DATE" specify.
+     * @param r: the GTD item rem to link
+     * @param link: the anchor link in the Daily doc pointing at "r". (optional input, will be a new portal containing "r" if left void)
+     * @return the actual anchor link in daily doc as timestamp if "r.THE_DATE" exists.
+     */
     const linkGTDItemToDairy=async (r:Rem,link?:Rem)=>{
-        const dateIds=await getDailyDocIdWithProperty(r);
+        const dateIds=await getDateRemIdWithProperty(r);
         link = link || await createPortalFor(r);
         if(dateIds.length&&link)
         {
+            //get the "time tick" property
             let tick=await r.getTagPropertyValue(tickHost._id);
+            //get the "time tick" rem
             let tickRemL=await plugin.richText.getRemIdsFromRichText(tick);
 
 
             const dateRem=await plugin.rem.findOne(dateIds[0]);
+
+            //the var "stamp" has 3 types
+            //1. if the GTD item "r" has no property "TimeTick", "stamp" will be the daily doc
+            //2. if the "TimeTick" property of "r" is plain text, a new stamp tagged with "Time Tick" powerUp will be created, whose content will be the plain text
+            //3. if the "TimeTick" property of "r" is a reference to another rem, "stamp" will be that rem.
             let stamp= await plugin.richText.length(tick) ?
-                (tickRemL.length===0 ? await setupStamp(dateRem,tick): await plugin.rem.findOne(tickRemL[0]))
+                (tickRemL.length===0 ? await setupStampWithRichText(dateRem,tick): await plugin.rem.findOne(tickRemL[0]))
                 : dateRem;
 
 
@@ -419,34 +526,40 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                     }
                 }
             }
+            return stamp
 
         }
     }
+    //endregion
+
+    //region Definitions of event listener handler
 
     const waitListHandler=async (r:Rem)=>{
-        //move r into WAIT list
-        await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Later)
-
-
-        let dateDocL=await getDailyDocIdWithProperty(r)
+        let dateDocL=await getDateRemIdWithProperty(r)
 
         const rRefText= await plugin.richText.rem(r).value()
-        let rRef=await plugin.rem.createRem()
-
-
         // if specific time tick was not designated, place items into references of "Today" PowerUp at that DailyDoc
         // (Or left them in the DailyDoc directly?)
+
         if(dateDocL.length)
         {
-
-            await linkGTDItemToDairy(r,rRef)
-            rRef?.setText(rRefText)
             //remove the tag "GTD items"
             await r.removeTag(gtdHost._id)
+            //move r into WAIT list
+            await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Later)
+            //create reference of "r" in Daily Doc
+            let rRef=await plugin.rem.createRem()
+            await linkGTDItemToDairy(r,rRef)
+            rRef?.setText(rRefText)
+
+        }
+        else
+        {
+            await plugin.app.toast("You need to assign a date")
         }
 
 
-      }
+    }
     const awaitListHandler=async (r:Rem) =>{
         await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Delegate)
 
@@ -480,6 +593,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //move the item into the "REFERENCE/Successive Ones" folder
         await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Reference);
 
+
         //remove the tag "GTD items"
         await r.removeTag(gtdHost._id)
     }
@@ -508,6 +622,26 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             }
         })
     }
+    //endregion
+
+    //region Init event listeners
+
+    /**
+     * check whether a rem is tagged by the host
+     * @param hostId the id of the specific host
+     * @param r the rem to check
+     */
+    const isTaggedWithHost=async (hostId:string,r:Rem)=>{
+        const tags=await r.getTagRems()
+        for(const typeParent of tags)
+        {
+            if(hostId===typeParent._id)
+                return true
+        }
+        return false
+    }
+
+
     const handlerMap=new Map(
         [
             ["Later",waitListHandler],
@@ -521,30 +655,89 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     );
 
 
-    for(const act of act_logger_slotCode_list)
-    {
-        const actSlot=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1])
-        if(!actSlot)continue;
-        const actionHost=await getHostRemOf(actSlot)
-        if(!actionHost)continue;
 
-        await plugin.event.addListener(AppEvents.RemChanged,actSlot._id,async ()=>{
+    let gtdActionQueue=new Set()
+    for(const actSlot of await treat_as_slot?.getChildrenRem())
+    {
+        const slotHost=await getHostRemOf(actSlot)
+        if(!slotHost)
+        {
+            const slotText=actSlot.text && await plugin.richText.toString(actSlot.text)
+            if(slotText)
+            await plugin.app.toast(slotText+" is nowhere to be found...")
+            return
+        }
+
+        //when ANY one host slot with this handler is changed, the handler will be triggered
+        //then processing ALL the GTD items tagged with the "GTD Host"
+        //so there may be "concurrent" conflicts between these handlers, which will duplicate the edits to Rems.
+        //"handlerCaller" wraps the handlers to filter the duplicate edit
+        const handlerCaller=async ()=>{
+
+            if(slotHost._id!==(await getHostRemOf(actSlot))._id)
+            {
+                await plugin.event.removeListener(AppEvents.RemChanged,slotHost._id)
+                return
+            }
             let gtdItems=await gtdHost.taggedRem();
             for(const it of gtdItems)
             {
-                const actVal=await  it.getTagPropertyValue(actionHost._id);
+                if(gtdActionQueue.has(it._id))
+                {
+                   continue
+                }
+                else{
+                    gtdActionQueue.add(it._id)
+                }
+                // the richText type of value assigning the treatment to a GTD item (e.g. Later/Delegate/SomeDay...)
+                const actVal=await  it.getTagPropertyValue(act_slot_host._id);
                 //todo : the values of Option-type properties will be reference or just duplicate the text in RemNote's default routine?
                 const actIds=await plugin.richText.getRemIdsFromRichText(actVal);
+                //the corresponding powerUp of the var "actVal" , for the action to a GTD item
+                const actPw=(await slotHost.getTagRems())[0]
+                if(!(actPw&&actPw.text))continue
+                const actCommand=await plugin.richText.toString(actPw.text)
                 if(!actIds.length)continue;
-                if(actIds[0]===actionHost._id)
+                if(actIds[0]===slotHost._id)
                 {
-                    const handle=handlerMap.get(act[0]);
-                    (handle) && await handle(it);
+                    const handle=handlerMap.get(actCommand.trim());
+                    if(handle&&await isTaggedWithHost(slotHost._id,it)){
+                        await plugin.event.removeListener(AppEvents.RemChanged,slotHost._id)
+                        await handle(it);
+                        await plugin.event.addListener(AppEvents.RemChanged,slotHost._id,handlerCaller)
+                    }
                 }
             }
+            for(const it of gtdItems)
+            {
+                gtdActionQueue.delete(it._id)
+            }
 
-        })
+        }
+
+        await plugin.event.addListener(AppEvents.RemChanged,slotHost._id,handlerCaller)
     }
+
+    // for(const act of act_logger_slotCode_list)
+    // {
+    //     const actSlot=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1])
+    //     if(!actSlot||!act_slot_host)continue;
+    //     await plugin.event.addListener(AppEvents.RemChanged,actSlot._id,async ()=>{
+    //         let gtdItems=await gtdHost.taggedRem();
+    //         for(const it of gtdItems)
+    //         {
+    //             const actVal=await  it.getTagPropertyValue(act_slot_host._id);
+    //             const actIds=await plugin.richText.getRemIdsFromRichText(actVal);
+    //             if(!actIds.length)continue;
+    //             if(actIds[0]===act_slot_host._id)
+    //             {
+    //                 const handle=handlerMap.get(act[0]);
+    //                 (handle) && await handle(it);
+    //             }
+    //         }
+    //
+    //     })
+    // }
 
     //endregion
 

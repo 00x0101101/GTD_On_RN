@@ -5,3 +5,5 @@ dist-ssr
 *.local
 *.zip
 \PluginZip.zip
+\src\widgets\utils.tsx
+
