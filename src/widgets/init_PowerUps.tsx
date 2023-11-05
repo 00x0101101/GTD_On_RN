@@ -230,6 +230,26 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     });
     //endregion
 
+    //region util Functions
+    // literally.
+    const createPortalFor=async (r:Rem)=>{
+        const portal=await plugin.rem.createPortal();
+        if(!portal)return;
+        await r.addToPortal(portal);
+        return portal;
+    }
+    const createReferenceFor=async (r:Rem,refParent?:Rem)=>{
+        const ref=await plugin.rem.createRem()
+        if(!ref)return
+        const refContent=await plugin.richText.rem(r).value()
+        await ref.setText(refContent)
+        if(refParent)await ref.setParent(refParent)
+        return ref
+    }
+
+    //endregion
+
+
     //region Init the Action Type Logger PW and Container PW
     const act_logger_slotCode_list=Object.entries(ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS)
 
@@ -298,13 +318,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const gtdContainerInterface=await plugin.powerup.getPowerupByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE)
     if(gtdContainerInterface&&(!(await gtdContainerInterface.remsReferencingThis()).length|| (((await gtdContainerInterface.remsReferencingThis())[0].parent)!==sidebar?._id) ))
     {
-        const gtdContainerInterfaceRef=await plugin.rem.createRem()
-        if(gtdContainerInterfaceRef)
-        {
-            await gtdContainerInterfaceRef.setText(await plugin.richText.rem(gtdContainerInterface).value())
-            await gtdContainerInterfaceRef.setParent(sidebar?._id)
-            await addToSidebar(gtdContainerInterface)
-        }
+        await createReferenceFor(gtdContainerInterface,sidebar)
+        await addToSidebar(gtdContainerInterface)
     }
     gtdContainerInterface?.setIsDocument(true)
     //endregion
@@ -326,8 +341,16 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const act_slot_host=treat_as_slot&& await getHostRemOf(treat_as_slot)
     if(!(treat_as_slot&&act_slot_host))return
 
+
+
+    const timeLineTypeHost=await getHostRemOf(tlkPW)
+    const gtdHost=await getHostRemOf(gtd_host_pw)
+    const dateHost=await getHostRemOf(date_host_pw)
+    const tickHost=await getHostRemOf(tick_host_pw)
+
     //region Init GTD action hosts and corresponding containers
 
+    //region Init containers
     if(act_slot_host)
     {
         await genHostPropertiesWithLog(act_slot_host,treat_as_slot,HostType.OPTIONS,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS)
@@ -343,17 +366,15 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         }
     }
-
     //endregion
 
-    const timeLineTypeHost=await getHostRemOf(tlkPW)
-    const gtdHost=await getHostRemOf(gtd_host_pw)
-    const dateHost=await getHostRemOf(date_host_pw)
-    const tickHost=await getHostRemOf(tick_host_pw)
-
-    //region register options of TickType_Slot under the host
+    // register options of TickType_Slot under the host
     await genHostPropertiesWithLog(timeLineTypeHost,tlkPW,HostType.OPTIONS,reverseObj(TIME_TK_PW_CODE.TICK_TYPE))
+
     //endregion
+
+
+
 
     //region Init Commands
     await plugin.app.registerCommand({
@@ -379,7 +400,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     //endregion
 
-    //region Functions to process GTD panel in sidebar
+    //region Functions for GTD panel in sidebar
 
     /**
      * move GTD item "r" into one container rem in the Container Panel
@@ -394,14 +415,40 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         const container=await getHostRemOf(containerPW)
         container && await r.setParent(container);
     }
-    // literally.
-    const createPortalFor=async (r:Rem)=>{
-        const portal=await plugin.rem.createPortal();
-        if(!portal)return;
-        await r.addToPortal(portal);
-        return portal;
-    }
+
+
     //endregion
+
+    //region Functions for properties handling (except "Treat as" actions.)
+
+    /**
+     * get the property specified by "propertyId" of the rem "r" and return it as "type"
+     * @param r
+     * @param propertyId
+     * @param type
+     * @return
+     *
+     * when the property to return does not contain a reference, the param "type" will be ignored and the plain text itself will be returned.
+     *
+     * when `type==="Rem"` and the property to return contains a reference, but the Rem cannot be found (e.g. Privacy Rem or Deleted Rem), the function will return this id despite the "type" parameter
+     */
+    async function getPropertyOfRemAsType(r:Rem,propertyId:string,type:"Rem"|"RemId"|"RichText"){
+        let propertyRichText=await r.getTagPropertyValue(propertyId)
+        let results:string[]=[];
+        if(type==="Rem")
+        {
+            results=await plugin.richText.getRemIdsFromRichText(propertyRichText)
+            const resultRems=await plugin.rem.findMany(results)
+            if(resultRems?.length)
+                return resultRems
+        }
+        if(type==="RemId")
+        {
+            if(results.length)
+                return results
+        }
+        return propertyRichText
+    }
 
     //region Functions to process time-related things, like stamps and ticks
     async function setupStampWithRichText(daily:Rem|undefined,stampRichText:RichTextInterface) {
@@ -432,34 +479,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         return await setupStampWithRichText(daily,stampRichText);
     }
 
-    /**
-     * get the property specified by "propertyId" of the rem "r" and return it as "type"
-     * @param r
-     * @param propertyId
-     * @param type
-     * @return
-     *
-     * when the property to return does not contain a reference, the param "type" will be ignored and the plain text itself will be returned.
-     *
-     * when `type==="Rem"` and the property to return contains a reference, but the Rem cannot be found (e.g. Privacy Rem or Deleted Rem), the function will return this id despite the "type" parameter
-     */
-    async function getPropertyOfRemAsType(r:Rem,propertyId:string,type:"Rem"|"RemId"|"RichText"){
-        let propertyRichText=await r.getTagPropertyValue(propertyId)
-        let results:string[]=[];
-        if(type==="Rem")
-        {
-            results=await plugin.richText.getRemIdsFromRichText(propertyRichText)
-            const resultRems=await plugin.rem.findMany(results)
-            if(resultRems?.length)
-                return resultRems
-        }
-        if(type==="RemId")
-        {
-            if(results.length)
-                return results
-        }
-        return propertyRichText
-    }
 
     /**
      * get the  RemIds  "THE_DATE" property of a GTD item refers to.
@@ -532,6 +551,14 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
     //endregion
 
+    const MoveToOwnerPrj=async (r:Rem)=>{
+
+    }
+
+    //endregion
+
+
+
     //region Definitions of event listener handler
 
     const waitListHandler=async (r:Rem)=>{
@@ -592,6 +619,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const refListHandler=async (r:Rem) =>{
         //move the item into the "REFERENCE/Successive Ones" folder
         await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Reference);
+        //todo (IMPORTANT) : what about the logic when "r" has property "r.OwnerProject"?
+
 
 
         //remove the tag "GTD items"
