@@ -249,6 +249,11 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         await r.addToPortal(portal);
         return portal;
     }
+    /**
+     * create a reference rem for "r"
+     * @param r the rem to reference
+     * @param refParent if this parameter exists, the ref rem will be placed under this.
+     */
     const createReferenceFor=async (r:Rem,refParent?:Rem)=>{
         const ref=await plugin.rem.createRem()
         if(!ref)return
@@ -422,7 +427,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
      * @param r GTD items to contain
      * @param containerCode the code specifying the container rem
      */
-    const getContained = async (r:Rem,containerCode:string) => {
+    const getCollected = async (r:Rem,containerCode:string) => {
         const containerPW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,containerCode);
         if(!containerPW)return;
         const container=await getHostRemOf(containerPW)
@@ -552,31 +557,69 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
 
     //region Function and variables to handle the "Owner Project" property
-    // const prjActionHost=await getHostRemOf((await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS.Project)) as Rem)
+
+    /**
+     * create a rem with specific content as a project rem
+     * @param text the content of the rem to create
+     * @return the created rem. But if text is blank, undefined will be returned
+     */
     const createPRJWithRichText =async (text:RichTextInterface) => {
+        if(text.length===0)return
         const newRem=await plugin.rem.createRem() as Rem
         await newRem.setText(text)
-        await getContained(newRem,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project)
+        await getCollected(newRem,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project)
+        return newRem
+        //todo: it is the work of next stage to introduce the "Natural Planning Model" functionality to the action tag "Project"
+        // "Natural Planning Model" is a miniature of Project Management( WBS/schedule with DAG sort/resource regulation/... )
+        /*const prjActionHost=await getHostRemOf((await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS.Project)) as Rem);
+          await newRem.addTag(prjActionHost._id);
+        * */
     }
 
-
-    const MoveToOwnerPrj=async (r:Rem)=>{
+    /**
+     * the "getCollected" logic for rem with "owner Project" property ( and mainly for rem with "treat as project" action)
+     * @param r the rem to collect/contain
+     * @param actionCode which container does "r" go?
+     */
+    const getContainedWithOwnerPrj=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project)=>{
         //get "r.OwnerProject" if this property exists.
         const ownerPropertyAsRem=await getPropertyOfRemAsRem(r,ownerPrjHost._id)
         //if the property value is text without rem references.
         if(!ownerPropertyAsRem||ownerPropertyAsRem.length===0)
         {
-            //todo : how about create a project with this property value?
+            //done : how about create a project with this property value?
             //Q: need to know whether "taggedRems" include indirect tagged Rems?
             //A: no problem, for there are special API named "ancestorTagRems" and "descendantTagRems"
             //Q: has other rems used the "tag channel"?
-            //A: "not yet" can be asserted after checked.
+            //A: "not yet" can be asserted after checking the code.
 
+            const newPrj= await createPRJWithRichText(await r.getTagPropertyValue(ownerPrjHost._id))
+            if(!newPrj)
+            {
+                await getCollected(r,actionCode)
+                return
+            }
+            await r.setTagPropertyValue(ownerPrjHost._id,await plugin.richText.rem(newPrj).value())
+            await r.setParent(newPrj._id)
         }
         //if there are references in the value of property
         else
         {
-
+            //when owner Project is unique
+            if(ownerPropertyAsRem.length===1)
+            {
+                const owner=ownerPropertyAsRem[0]
+                await r.setParent(owner)
+                await getCollected(await createReferenceFor(r) as Rem, actionCode)
+            }
+            //when this item belongs to multiple project.
+            else{
+                for(const owner of ownerPropertyAsRem)
+                {
+                    await createReferenceFor(r,owner)
+                }
+                await getCollected(r, actionCode)
+            }
         }
 
     }
@@ -600,7 +643,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //remove the tag "GTD items"
             await r.removeTag(gtdHost._id)
             //move r into WAIT list
-            await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Later)
+            await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Later)
             //create reference of "r" in Daily Doc
             let rRef=await createReferenceFor(r)
             await linkGTDItemToDairy(r,rRef)
@@ -615,9 +658,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     }
     const awaitListHandler=async (r:Rem) =>{
-        await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Delegate)
+        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Delegate)
 
-        //todo: I cannot come up with a better idea in such a haste
+        // XXX : I cannot come up with a better idea in such a haste
         //portal the item into Daily Doc
         await linkGTDItemToDairy(r)
 
@@ -627,8 +670,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
     const projectListHandler=async (r:Rem) =>{
         // move item rem into project folder and remove the tag "GTD items"
-        await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project);
-
+        // await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project);
+        await getContainedWithOwnerPrj(r)
 
         // create a rem named "next action" under the project and
         // tag "next action" with "GTD items"
@@ -645,23 +688,24 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
     const refListHandler=async (r:Rem) =>{
         //move the item into the "REFERENCE/Successive Ones" folder
-        await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Reference);
-        //todo (IMPORTANT) : what about the logic when "r" has property "r.OwnerProject"?
-
+        //await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Reference);
+        //DONE (IMPORTANT) : what about the logic when "r" has property "r.OwnerProject"?
+        //todo how to get items contained when the items has other property?
+        await getContainedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Reference)
 
 
         //remove the tag "GTD items"
         await r.removeTag(gtdHost._id)
     }
     const wasteListHandler = async (r:Rem) =>{
-        await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.WasteBin);
+        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.WasteBin);
         //portal the item into Daily Doc
         await linkGTDItemToDairy(r);
         //remove the GTD tag and related properties
         await r.removeTag(gtdHost._id)
     }
     const wishesListHandler = async (r:Rem) =>{
-        await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.SomeDay);
+        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.SomeDay);
         //move the item into Daily Doc
         await linkGTDItemToDairy(r);
         //remove the GTD tag and related properties
