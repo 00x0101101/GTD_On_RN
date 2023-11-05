@@ -1,3 +1,5 @@
+import { Rem, RichTextElementInterface, RichTextInterface } from '@remnote/plugin-sdk';
+
 const GTD_LOGGER_CODE={
   TIME_TICK:"ttk",
   THE_DATE: "gdat",
@@ -33,6 +35,7 @@ const actContainerSlots={
 export const ACT_OPTIONS_LOGGER_PW_CODE={
   ACT_PW:"gacto",
   CONTAINER_PW:"gactc",
+  //the powerUp code whose owner tags the "Container Panel" in the Sidebar.
   CONTAINER_INTERFACE:"gactc_i",
   ACT_SLOTS:actOptions,
   CONTAIN_SLOTS:actContainerSlots
@@ -55,6 +58,19 @@ export const TTK_LOGGER_PW_CODE={
   LOGGER_SLOTS:tickType
 }
 
+// mapping type
+// see [code example](https://www.typescriptlang.org/play?#code/FASwdgLgpgTgZgQwMZQAQDUEBsCuUDOqqA3sEUQgFyr4QzgDmZ5ARtWDgLYuzNEDaAaygBParXpgGAXWo4wgsAHsA7mGABfYMAgiADmgAKqALyphIpXAzY8+HfrQAVUzdwF+AcgSfpDg6gAyq6Y7vheLL7acPJIECBKYKgg+ADSovgAFBZyCspqAJTUFsmExqTkqDBQEDgwSSUmTajenqgAPu3moqbNnpGa0bHxiagMNaF4ADzpIqhQAB7QYAAmZQB82aLUs0VudvyzfjFgcQlJ4xCTUFtiNHSMe-KKqkkV5EiJtPdK1dTXhDM70qFGoACIABJQLBYJRggA0fBBbFQAEYAEwAZkRlS0SJA1kyKVmWQsBQKJCRlWqtXqP2qQlEflx2mpNTqSVovygjJEfjxAHoBagkKV7pImJ8wN9RWZLtdMq0CsAhagVmKONxeFLvuq5RNbDd+p5laqlBAABawQgpVDPfLqHUQeaueWGzJgmJIQSoS1oFS-LArMEFIA)
+// or  [explanation in Chinese](https://www.zhihu.com/question/463682477)
+export interface RemPropertyTypes{
+  Rem:Rem[],
+  RemId:string[],
+  RichTextElementInterface:RichTextInterface
+}
+export type RemPropertyType=keyof RemPropertyTypes
+export const isRemPropertyType=(key:unknown) : key is RemPropertyType =>{
+  return key==="Rem"||key==="RemId"||key==="RichTextElementInterface"
+}
+
 export class eventCombo{
   slotSrc:string|undefined;
   slotRef:string|undefined;
@@ -67,7 +83,7 @@ export enum HostCheckResult {
   HOST_UNIQUE=1
 }
 export enum HostType{
-  SLOT = 1,
+  PROPERTY = 1,
   OPTIONS = 2,
   CONTAINER = 3
 

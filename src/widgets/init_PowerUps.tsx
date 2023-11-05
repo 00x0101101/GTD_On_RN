@@ -16,7 +16,7 @@ import {
     GTD_LOGGER_PW_CODE,
     HostCheckResult,
     HostType,
-    PW2SLOTS,
+    PW2SLOTS, RemPropertyType,
     TIME_TK_PW_CODE,
 } from './consts';
 import moment from 'moment';
@@ -127,14 +127,23 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             await property?.setParent(host);
 
         }
+
         await property?.addTag(slot)
         slot.text &&  await property?.setText(slot.text);
-        await property?.setIsProperty(options===HostType.SLOT)
+        await property?.setIsProperty(options===HostType.PROPERTY)
 
         return property
     }
-    const genHostPropertiesWithLog =async (host:Rem,loggerLike:string|Rem,hType=HostType.SLOT,optSet:any=undefined) => {
-        if(hType===HostType.SLOT)
+
+    /**
+     * apply the properties/options from the PowerUp template to the host PowerUp has tagged
+     * @param host
+     * @param loggerLike rem to provide template to the host, can be PowerUp itself or properties of powerUp
+     * @param hType the type of template slot:  Options ? Properties? Container taggers?
+     * @param optSet a object to filter rems under "loggerLike" which should not be template slots (e.g. "QueryTable")
+     */
+    const genHostPropertiesWithLog =async (host:Rem, loggerLike:string|Rem, hType=HostType.PROPERTY, optSet:any=undefined) => {
+        if(hType===HostType.PROPERTY)
         {
             if(typeof loggerLike!=="string")return
             const logger=await plugin.powerup.getPowerupByCode(loggerLike);
@@ -149,7 +158,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         else if(hType===HostType.OPTIONS)
         {
             if(typeof loggerLike==="string"||!optSet)return
+
             let slotLikes=await loggerLike.getChildrenRem()
+            // load the options of slots (if exists)
             for(const opt of slotLikes)
             {
 
@@ -312,6 +323,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const date_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.THE_DATE)
     const tick_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIME_TICK)
     const tlkPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE)
+    const ownerPrjPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_PROJECT) as Rem
     // const waitLContainerPW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Later)
 
     //region Init container Interface(GTD Panel in sidebar)
@@ -319,6 +331,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     if(gtdContainerInterface&&(!(await gtdContainerInterface.remsReferencingThis()).length|| (((await gtdContainerInterface.remsReferencingThis())[0].parent)!==sidebar?._id) ))
     {
         await createReferenceFor(gtdContainerInterface,sidebar)
+        // todo :maybe the plugin did not  pass the marketplace check due to operating the sidebar is a premium feature?
         await addToSidebar(gtdContainerInterface)
     }
     gtdContainerInterface?.setIsDocument(true)
@@ -347,7 +360,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const gtdHost=await getHostRemOf(gtd_host_pw)
     const dateHost=await getHostRemOf(date_host_pw)
     const tickHost=await getHostRemOf(tick_host_pw)
-
+    const ownerPrjHost=await getHostRemOf(ownerPrjPW)
     //region Init GTD action hosts and corresponding containers
 
     //region Init containers
@@ -422,32 +435,23 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     //region Functions for properties handling (except "Treat as" actions.)
 
     /**
-     * get the property specified by "propertyId" of the rem "r" and return it as "type"
+     * get the property specified by "propertyId" of the rem "r" and return it as Rem
      * @param r
      * @param propertyId
-     * @param type
      * @return
      *
      * when the property to return does not contain a reference, the param "type" will be ignored and the plain text itself will be returned.
      *
      * when `type==="Rem"` and the property to return contains a reference, but the Rem cannot be found (e.g. Privacy Rem or Deleted Rem), the function will return this id despite the "type" parameter
      */
-    async function getPropertyOfRemAsType(r:Rem,propertyId:string,type:"Rem"|"RemId"|"RichText"){
+    async function getPropertyOfRemAsRem(r:Rem,propertyId:string) {
         let propertyRichText=await r.getTagPropertyValue(propertyId)
-        let results:string[]=[];
-        if(type==="Rem")
-        {
-            results=await plugin.richText.getRemIdsFromRichText(propertyRichText)
-            const resultRems=await plugin.rem.findMany(results)
-            if(resultRems?.length)
-                return resultRems
-        }
-        if(type==="RemId")
-        {
-            if(results.length)
-                return results
-        }
-        return propertyRichText
+        let results:string[];
+        results=await plugin.richText.getRemIdsFromRichText(propertyRichText)
+        const resultRems=await plugin.rem.findMany(results)
+        if(resultRems?.length)
+            return resultRems
+
     }
 
     //region Functions to process time-related things, like stamps and ticks
@@ -486,14 +490,10 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
      * In ideal condition the RemIds this function returns should be the id of a Daily Document(please check this if necessary)
      * @param r the rem to query, tagged as a GTD item
      */
-    async function getDateRemIdWithProperty(r:Rem):Promise<string[]>{
-        const defaultVal:string[]=[]
-        const result=await getPropertyOfRemAsType(r,dateHost._id,"RemId")
-        if(result.length>0 && (typeof (result[0]))==="string" && (typeof result) === (typeof defaultVal)) {
-            // @ts-ignore
-            return result;
-        }
-        else return defaultVal
+    async function getDateRemIdWithProperty(r:Rem) {
+
+        return await getPropertyOfRemAsRem(r,dateHost._id) as Rem[]
+
         // //add DDL (Sometimes with Time tick) and informing Date into corresponding DailyDoc
         // let date=await r.getTagPropertyValue(dateHost._id);
         // // let dateDoc=(dailyDocPW ?  await plugin.search.search(date,dailyDocPW,{numResults:1}):  await plugin.search.search(date))[0]
@@ -506,17 +506,16 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
      * @return the actual anchor link in daily doc as timestamp if "r.THE_DATE" exists.
      */
     const linkGTDItemToDairy=async (r:Rem,link?:Rem)=>{
-        const dateIds=await getDateRemIdWithProperty(r);
+        const dateRems=await getDateRemIdWithProperty(r);
         link = link || await createPortalFor(r);
-        if(dateIds.length&&link)
+        if(dateRems.length&&link)
         {
+            const dateRem=dateRems[0]
             //get the "time tick" property
             let tick=await r.getTagPropertyValue(tickHost._id);
             //get the "time tick" rem
             let tickRemL=await plugin.richText.getRemIdsFromRichText(tick);
 
-
-            const dateRem=await plugin.rem.findOne(dateIds[0]);
 
             //the var "stamp" has 3 types
             //1. if the GTD item "r" has no property "TimeTick", "stamp" will be the daily doc
@@ -551,9 +550,37 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
     //endregion
 
+
+    //region Function and variables to handle the "Owner Project" property
+    // const prjActionHost=await getHostRemOf((await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS.Project)) as Rem)
+    const createPRJWithRichText =async (text:RichTextInterface) => {
+        const newRem=await plugin.rem.createRem() as Rem
+        await newRem.setText(text)
+        await getContained(newRem,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project)
+    }
+
+
     const MoveToOwnerPrj=async (r:Rem)=>{
+        //get "r.OwnerProject" if this property exists.
+        const ownerPropertyAsRem=await getPropertyOfRemAsRem(r,ownerPrjHost._id)
+        //if the property value is text without rem references.
+        if(!ownerPropertyAsRem||ownerPropertyAsRem.length===0)
+        {
+            //todo : how about create a project with this property value?
+            //Q: need to know whether "taggedRems" include indirect tagged Rems?
+            //A: no problem, for there are special API named "ancestorTagRems" and "descendantTagRems"
+            //Q: has other rems used the "tag channel"?
+            //A: "not yet" can be asserted after checked.
+
+        }
+        //if there are references in the value of property
+        else
+        {
+
+        }
 
     }
+
 
     //endregion
 
@@ -575,9 +602,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //move r into WAIT list
             await getContained(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Later)
             //create reference of "r" in Daily Doc
-            let rRef=await plugin.rem.createRem()
+            let rRef=await createReferenceFor(r)
             await linkGTDItemToDairy(r,rRef)
-            rRef?.setText(rRefText)
+
 
         }
         else
