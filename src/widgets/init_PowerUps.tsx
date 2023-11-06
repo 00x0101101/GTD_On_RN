@@ -532,7 +532,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         // return await plugin.richText.getRemIdsFromRichText(date);
     }
     /**
-     * link gtd item "r" to the daily doc the property "r.THE_DATE" specify.
+     * link gtd item "r" to the daily doc and time stamp the property "r.THE_DATE" and "r.TIME_TICK" specify.
      * @param r: the GTD item rem to link
      * @param link: the anchor link in the Daily doc pointing at "r". (optional input, will be a new portal containing "r" if left void)
      * @return the actual anchor link in daily doc as timestamp if "r.THE_DATE" exists.
@@ -609,7 +609,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
      * @param actionCode which container does "r" go?
      * @return a boolean value indicates whether "r" has been got collected by this function
      */
-    const getContainedWithOwnerPrj=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project)=>{
+    const getCollectedWithOwnerPrj=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project)=>{
 
 
         //get the rems of "r.OwnerProject" if this property exists.
@@ -658,17 +658,21 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     }
 
+    const getContainedWithOwnerPrj=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project)=>{
+        return (await getCollectedWithOwnerPrj(r,actionCode))||(getCollected(r,actionCode))
+    }
+
     //endregion
 
     //region Functions to handle the "Scenario" property
 
     /**
-     * the logic to process rems with "Scenario" property
+     * the logic to process rems with "r.Scenario" property
      * @param r
-     * @param actionCode
      */
-    const getContainedWithScenario=async (r:Rem,actionCode:string)=>{
-        //region Process "r.Scenario"
+    const getContainedWithScenario=async (r:Rem)=>{
+        //todo Scenario may contains peoples to delegate...
+
 
         //get the rems of "r.Scenario" if this property exists.
         const scenarioAsRem=await getPropertyOfRemAsRem(r,sceneHost._id)
@@ -695,7 +699,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         }
 
-        //endregion
     }
 
     //add listener for Scenario rems
@@ -720,7 +723,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const waitListHandler=async (r:Rem)=>{
         let dateDocL=await getDateRemIdWithProperty(r)
 
-        const rRefText= await plugin.richText.rem(r).value()
         // if specific time tick was not designated, place items into references of "Today" PowerUp at that DailyDoc
         // (Or left them in the DailyDoc directly?)
 
@@ -729,7 +731,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //remove the tag "GTD items"
             await r.removeTag(gtdHost._id)
             //move r into WAIT list
-            await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Later)
+            await getContainedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Later)
             //create reference of "r" in Daily Doc
             let rRef=await createReferenceFor(r)
             await linkGTDItemToDairy(r,rRef)
@@ -740,12 +742,12 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         {
             await plugin.app.toast("A date as a tip needed if you want make it LATER to do")
         }
-
-
     }
     const awaitListHandler=async (r:Rem) =>{
-        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Delegate)
+        await getContainedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Delegate)
 
+        //todo if "scenario" does not exists, a toast is needed to inform the user.
+        await getContainedWithScenario(r);
         // XXX : I cannot come up with a better idea in such a haste
         //portal the item into Daily Doc
         await linkGTDItemToDairy(r)
@@ -757,7 +759,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const projectListHandler=async (r:Rem) =>{
         // move item rem into project folder and remove the tag "GTD items"
         // await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project);
-        await getContainedWithOwnerPrj(r)
+        await getCollectedWithOwnerPrj(r)
 
         // create a rem named "next action" under the project and
         // tag "next action" with "GTD items"
