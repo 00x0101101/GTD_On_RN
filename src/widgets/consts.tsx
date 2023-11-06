@@ -31,6 +31,7 @@ const actContainerSlots={
   Reference:"c_ref",
   WasteBin:"c_bin",
   Now:"c_now"
+
 }
 export const ACT_OPTIONS_LOGGER_PW_CODE={
   ACT_PW:"gacto",
@@ -38,7 +39,10 @@ export const ACT_OPTIONS_LOGGER_PW_CODE={
   //the powerUp code whose owner tags the "Container Panel" in the Sidebar.
   CONTAINER_INTERFACE:"gactc_i",
   ACT_SLOTS:actOptions,
-  CONTAIN_SLOTS:actContainerSlots
+  ACT_CONTAINER_SLOTS:actContainerSlots,
+  ASPECT_CONTAINERS:{
+    SCENARIO: "g_scene"
+  }
 }
 
 const tickType={
@@ -93,5 +97,5 @@ export const GTD_HOST_PW="host_gtd"
 export const PW2SLOTS=new Map<string,Object>([
     [GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS],
     [ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS],
-    [ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS]
+    [ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS]
 ])

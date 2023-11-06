@@ -23,7 +23,7 @@ import moment from 'moment';
 
 let utils
 
-
+//region utility Functions to process Typescript Objects
 const allKeyObj=(obj:{[key:string]:string})=>{
     return Object.keys(obj).reduce((acc,key)=>{
         // @ts-ignore
@@ -32,7 +32,6 @@ const allKeyObj=(obj:{[key:string]:string})=>{
     },{} as {[key:string]:string})
 }
 
-
 const reverseObj=(obj:{[key:string]:string})=>{
     return Object.keys(obj).reduce((acc,key)=>{
         // @ts-ignore
@@ -40,8 +39,17 @@ const reverseObj=(obj:{[key:string]:string})=>{
         return acc;
     },{} as {[key:string]:string})
 }
+//endregion
 
 export const init_PowerUps =async (plugin:ReactRNPlugin) => {
+
+    //region Functions to deploy templates from powerUps to hosts
+
+    /**
+     * function to check whether the powerUp has only one host
+     * @param pw the powerUp to check
+     * @return a enum value to indicate the uniqueness state of the host which "pw" owns
+     */
     const hostUniqueCheck=async (pw:Rem)=>{
         //const pw=await plugin.powerup.getPowerupByCode(pwCode)
         if(!pw)return HostCheckResult.PW_NOT_EXIST;
@@ -50,6 +58,12 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         if(hostList.length>1)return HostCheckResult.HOST_NOT_UNIQUE
         if(hostList.length===1)return HostCheckResult.HOST_UNIQUE
     }
+
+    /**
+     * a wrap on "genHostPropertiesWithLog" to reassure each of the hosts is unique for their powerUp.
+     * @param pwCode powerUp code for the root Host
+     * @param loggerCode the code of the powerUp to deploy its template onto the root Host
+     */
     const hostUniqueRectify=async (pwCode:string,loggerCode:string)=>{
         const pw=await plugin.powerup.getPowerupByCode(pwCode);
         if(!pw)return
@@ -58,7 +72,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         switch (checkCode) {
             case HostCheckResult.PW_NOT_EXIST: return;
             case HostCheckResult.HOST_UNIQUE:
-                host=(await pw.taggedRem())[0]
+                // host=(await pw.taggedRem())[0]
+                host=await getHostRemOf(pw);
                 await genHostPropertiesWithLog(host,loggerCode)
                 break;
             case HostCheckResult.HOST_NOT_EXIST:
@@ -90,11 +105,11 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
 
     /**
-     * Apply the properties of pwCode & slotCode to the host
-     * @param host
+     * Apply the properties from the template in pwCode & slotCode to one host
+     * @param host the rem to apply
      * @param pwCode the code of powerUp as the template of hosts
      * @param slotCode the PW slot code or option Rem as the tagger of the properties of the host
-     * @param options
+     * @param options the type of the slots in template
      */
     const supplyHostPropertyVal=async (host:Rem,pwCode:string,slotCode:string|Rem,options:HostType)=>{
 
@@ -136,7 +151,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
 
     /**
-     * apply the properties/options from the PowerUp template to the host PowerUp has tagged
+     * apply the properties/options from the PowerUp template to the host PowerUp has tagged, in batch.
      * @param host
      * @param loggerLike rem to provide template to the host, can be PowerUp itself or properties of powerUp
      * @param hType the type of template slot:  Options ? Properties? Container taggers?
@@ -177,6 +192,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
     }
 
+    //endregion
+
+
     const getHostRemOf=async (pw:Rem)=>{
         return (await pw.taggedRem())[0]
     }
@@ -184,8 +202,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         let children= await tagRem?.getChildrenRem()
         return children && await filterAsync(children,c=>c.isProperty())
     }
-
-
 
     utils={
         hostUniqueCheck:hostUniqueCheck,
@@ -242,6 +258,12 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     //endregion
 
     //region util Functions
+
+    const createRemWithText=async (text:RichTextInterface)=>{
+        const newRem=await plugin.rem.createRem() as Rem;
+        await newRem.setText(text);
+        return newRem
+    }
     // literally.
     const createPortalFor=async (r:Rem)=>{
         const portal=await plugin.rem.createPortal();
@@ -255,10 +277,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
      * @param refParent if this parameter exists, the ref rem will be placed under this.
      */
     const createReferenceFor=async (r:Rem,refParent?:Rem)=>{
-        const ref=await plugin.rem.createRem()
-        if(!ref)return
         const refContent=await plugin.richText.rem(r).value()
-        await ref.setText(refContent)
+        const ref=await createRemWithText(refContent)
         if(refParent)await ref.setParent(refParent)
         return ref
     }
@@ -295,7 +315,14 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     //region Init interface panel PW in sidebar
     // a rem to show all the container rems of GTD engine
     await plugin.app.registerPowerup("GTD Containers Panel",ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE,
-        "a rem to show all the container rems of GTD engine" ,{slots:[]})
+        "a rem to show all the container rems of GTD engine" ,{slots:Object.entries(ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_CONTAINERS).map((r)=>{
+                return {
+                    code:r[1],
+                    name:r[0],
+                    hidden: false,
+                    onlyProgrammaticModifying: true
+                }
+            })})
     //endregion
 
     //endregion
@@ -329,7 +356,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const tick_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIME_TICK)
     const tlkPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE)
     const ownerPrjPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_PROJECT) as Rem
-    // const waitLContainerPW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Later)
+    const scenePW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE,ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_CONTAINERS.SCENARIO) as Rem
 
     //region Init container Interface(GTD Panel in sidebar)
     const gtdContainerInterface=await plugin.powerup.getPowerupByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE)
@@ -366,6 +393,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const dateHost=await getHostRemOf(date_host_pw)
     const tickHost=await getHostRemOf(tick_host_pw)
     const ownerPrjHost=await getHostRemOf(ownerPrjPW)
+    const sceneHost=await getHostRemOf(scenePW)
     //region Init GTD action hosts and corresponding containers
 
     //region Init containers
@@ -374,12 +402,10 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         await genHostPropertiesWithLog(act_slot_host,treat_as_slot,HostType.OPTIONS,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS)
         for(const act of act_logger_slotCode_list)
         {
-            // let option=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1])
-            // if(!option)continue
-            // await supplyHostPropertyVal(act_slot_host,ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1],HostType.OPTIONS)
 
             let container_slot=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,"c"+act[1])
             if(!(container_slot))continue;
+            // well, this `"c"+act[1]` can filter out containers not serving for the actions
             await supplyHostPropertyVal(act_slot_host,ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,"c"+act[1],HostType.CONTAINER)
 
         }
@@ -428,10 +454,11 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
      * @param containerCode the code specifying the container rem
      */
     const getCollected = async (r:Rem,containerCode:string) => {
-        const containerPW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,containerCode);
+        const containerPW=(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,containerCode))||(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE,containerCode));
         if(!containerPW)return;
         const container=await getHostRemOf(containerPW)
         container && await r.setParent(container);
+        return containerPW
     }
 
 
@@ -556,18 +583,18 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     //endregion
 
 
-    //region Function and variables to handle the "Owner Project" property
+    //region Functions and variables to handle the "Owner Project" property
 
     /**
-     * create a rem with specific content as a project rem
+     * create a rem with specific content as a GTD item rem
      * @param text the content of the rem to create
+     * @param itemType which type is this item? a rem representing a project or a scenario?
      * @return the created rem. But if text is blank, undefined will be returned
      */
-    const createPRJWithRichText =async (text:RichTextInterface) => {
+    const createITEMWithRichText =async (text:RichTextInterface,itemType:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project) => {
         if(text.length===0)return
-        const newRem=await plugin.rem.createRem() as Rem
-        await newRem.setText(text)
-        await getCollected(newRem,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project)
+        const newRem=await createRemWithText(text)
+        await getCollected(newRem,itemType)
         return newRem
         //todo: it is the work of next stage to introduce the "Natural Planning Model" functionality to the action tag "Project"
         // "Natural Planning Model" is a miniature of Project Management( WBS/schedule with DAG sort/resource regulation/... )
@@ -577,12 +604,15 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
 
     /**
-     * the "getCollected" logic for rem with "owner Project" property ( and mainly for rem with "treat as project" action)
+     * the "getCollected" logic for rem with "Owner Project" property ( and mainly for rem with "treat as project" action)
      * @param r the rem to collect/contain
      * @param actionCode which container does "r" go?
+     * @return a boolean value indicates whether "r" has been got collected by this function
      */
-    const getContainedWithOwnerPrj=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project)=>{
-        //get "r.OwnerProject" if this property exists.
+    const getContainedWithOwnerPrj=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project)=>{
+
+
+        //get the rems of "r.OwnerProject" if this property exists.
         const ownerPropertyAsRem=await getPropertyOfRemAsRem(r,ownerPrjHost._id)
         //if the property value is text without rem references.
         if(!ownerPropertyAsRem||ownerPropertyAsRem.length===0)
@@ -593,14 +623,15 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //Q: has other rems used the "tag channel"?
             //A: "not yet" can be asserted after checking the code.
 
-            const newPrj= await createPRJWithRichText(await r.getTagPropertyValue(ownerPrjHost._id))
+            const newPrj= await createITEMWithRichText(await r.getTagPropertyValue(ownerPrjHost._id))
             if(!newPrj)
             {
                 await getCollected(r,actionCode)
-                return
+                return true
             }
             await r.setTagPropertyValue(ownerPrjHost._id,await plugin.richText.rem(newPrj).value())
             await r.setParent(newPrj._id)
+            return true
         }
         //if there are references in the value of property
         else
@@ -611,6 +642,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 const owner=ownerPropertyAsRem[0]
                 await r.setParent(owner)
                 await getCollected(await createReferenceFor(r) as Rem, actionCode)
+                return false
             }
             //when this item belongs to multiple project.
             else{
@@ -619,17 +651,71 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                     await createReferenceFor(r,owner)
                 }
                 await getCollected(r, actionCode)
+                return true
             }
         }
 
+
     }
 
+    //endregion
+
+    //region Functions to handle the "Scenario" property
+
+    /**
+     * the logic to process rems with "Scenario" property
+     * @param r
+     * @param actionCode
+     */
+    const getContainedWithScenario=async (r:Rem,actionCode:string)=>{
+        //region Process "r.Scenario"
+
+        //get the rems of "r.Scenario" if this property exists.
+        const scenarioAsRem=await getPropertyOfRemAsRem(r,sceneHost._id)
+        //if the property value is text without rem references.
+        if(!scenarioAsRem||scenarioAsRem.length === 0)
+        {
+            const newScenario=await createITEMWithRichText(await r.getTagPropertyValue(sceneHost._id))
+            if(!newScenario)
+            {
+                // await getCollected(r,actionCode);
+                return
+            }
+            await newScenario?.addTag(sceneHost)
+            await r.setTagPropertyValue(sceneHost._id,await plugin.richText.rem(newScenario).value())
+        }
+        else
+        //if there are references in the value of property
+        {
+            for(const scene of scenarioAsRem)
+            {
+                await scene.setParent(sceneHost._id)
+                await scene.addTag(sceneHost)
+            }
+
+        }
+
+        //endregion
+    }
+
+    //add listener for Scenario rems
+    await plugin.event.addListener(AppEvents.RemChanged,sceneHost._id,async ()=>{
+        //Note: a rem is representing a scenario only when it is a child of the "sceneHost"
+        for(const scene of (await sceneHost.taggedRem()))
+        {
+            if(scene.parent!==sceneHost._id)
+            {
+                await scene.removeTag(sceneHost._id)
+            }
+        }
+    })
+    //endregion
 
     //endregion
 
 
 
-    //region Definitions of event listener handler
+    //region Definitions of event listener handler implementing "Treat as" actions.
 
     const waitListHandler=async (r:Rem)=>{
         let dateDocL=await getDateRemIdWithProperty(r)
@@ -643,7 +729,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //remove the tag "GTD items"
             await r.removeTag(gtdHost._id)
             //move r into WAIT list
-            await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Later)
+            await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Later)
             //create reference of "r" in Daily Doc
             let rRef=await createReferenceFor(r)
             await linkGTDItemToDairy(r,rRef)
@@ -652,13 +738,13 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
         else
         {
-            await plugin.app.toast("You need to assign a date")
+            await plugin.app.toast("A date as a tip needed if you want make it LATER to do")
         }
 
 
     }
     const awaitListHandler=async (r:Rem) =>{
-        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Delegate)
+        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Delegate)
 
         // XXX : I cannot come up with a better idea in such a haste
         //portal the item into Daily Doc
@@ -691,21 +777,21 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Reference);
         //DONE (IMPORTANT) : what about the logic when "r" has property "r.OwnerProject"?
         //todo how to get items contained when the items has other property?
-        await getContainedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Reference)
+        await getContainedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Reference)
 
 
         //remove the tag "GTD items"
         await r.removeTag(gtdHost._id)
     }
     const wasteListHandler = async (r:Rem) =>{
-        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.WasteBin);
+        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.WasteBin);
         //portal the item into Daily Doc
         await linkGTDItemToDairy(r);
         //remove the GTD tag and related properties
         await r.removeTag(gtdHost._id)
     }
     const wishesListHandler = async (r:Rem) =>{
-        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.SomeDay);
+        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.SomeDay);
         //move the item into Daily Doc
         await linkGTDItemToDairy(r);
         //remove the GTD tag and related properties
@@ -818,26 +904,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         await plugin.event.addListener(AppEvents.RemChanged,slotHost._id,handlerCaller)
     }
 
-    // for(const act of act_logger_slotCode_list)
-    // {
-    //     const actSlot=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,act[1])
-    //     if(!actSlot||!act_slot_host)continue;
-    //     await plugin.event.addListener(AppEvents.RemChanged,actSlot._id,async ()=>{
-    //         let gtdItems=await gtdHost.taggedRem();
-    //         for(const it of gtdItems)
-    //         {
-    //             const actVal=await  it.getTagPropertyValue(act_slot_host._id);
-    //             const actIds=await plugin.richText.getRemIdsFromRichText(actVal);
-    //             if(!actIds.length)continue;
-    //             if(actIds[0]===act_slot_host._id)
-    //             {
-    //                 const handle=handlerMap.get(act[0]);
-    //                 (handle) && await handle(it);
-    //             }
-    //         }
-    //
-    //     })
-    // }
 
     //endregion
 
