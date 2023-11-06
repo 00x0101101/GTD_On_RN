@@ -1,4 +1,11 @@
-import { Rem, RichTextElementInterface, RichTextInterface } from '@remnote/plugin-sdk';
+import {
+  PropertyLocation,
+  PropertyType,
+  Rem,
+  RichTextElementInterface,
+  RichTextInterface,
+  SelectSourceType,
+} from '@remnote/plugin-sdk';
 
 const GTD_LOGGER_CODE={
   TIME_TICK:"ttk",
@@ -33,6 +40,15 @@ const actContainerSlots={
   Now:"c_now"
 
 }
+
+export type aspect_containers={
+  SCENARIO: string
+}
+
+let aspects:aspect_containers={
+  SCENARIO: 'g_scene'
+};
+
 export const ACT_OPTIONS_LOGGER_PW_CODE={
   ACT_PW:"gacto",
   CONTAINER_PW:"gactc",
@@ -40,9 +56,15 @@ export const ACT_OPTIONS_LOGGER_PW_CODE={
   CONTAINER_INTERFACE:"gactc_i",
   ACT_SLOTS:actOptions,
   ACT_CONTAINER_SLOTS:actContainerSlots,
-  ASPECT_CONTAINERS:{
-    SCENARIO: "g_scene"
-  }
+  ASPECT_CONTAINERS:aspects,
+  ASPECT_OPTIONS:{
+    SCENARIO:[PropertyLocation.BELOW,PropertyType.TEXT,SelectSourceType.Enum,
+      {
+        Person:"Person",
+        Site:"Site",
+      }
+    ]
+  } as { [key in keyof aspect_containers]:any[] }
 }
 
 const tickType={

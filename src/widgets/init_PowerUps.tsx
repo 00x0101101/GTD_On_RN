@@ -11,7 +11,7 @@ import {
     SetRemType,
 } from '@remnote/plugin-sdk';
 import {
-    ACT_OPTIONS_LOGGER_PW_CODE,
+    ACT_OPTIONS_LOGGER_PW_CODE, aspect_containers,
     GTD_HOST_PW,
     GTD_LOGGER_PW_CODE,
     HostCheckResult,
@@ -251,7 +251,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 propertyType: slot[3],
                 propertyLocation:slot[2],
                 selectSourceType:slot[4],
-                enumValues:slot[5] //as Record<string,string>
+                enumValues:slot[5] // Record<string as Aila,string as Rem Content>
             }
         }),
     });
@@ -316,12 +316,21 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     // a rem to show all the container rems of GTD engine
     await plugin.app.registerPowerup("GTD Containers Panel",ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE,
         "a rem to show all the container rems of GTD engine" ,{slots:Object.entries(ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_CONTAINERS).map((r)=>{
-                return {
+            const aspect=r[0] as keyof aspect_containers
+            return {
                     code:r[1],
                     name:r[0],
-                    hidden: false,
-                    onlyProgrammaticModifying: true
-                }
+                    hidden: true,
+                    onlyProgrammaticModifying: true,
+
+                    /* propertyLocation:ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_OPTIONS[aspect][0],
+                     propertyType:ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_OPTIONS[aspect][1],
+                     selectSourceType:ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_OPTIONS[aspect][2],
+                     enumValues:ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_OPTIONS[aspect][3] */
+
+                    //Done: these are also "template slots" for host rems?maybe not... slot themselves are hidden but not the property of host...
+                }   // action is that making multiple Containers?
+                    // I have to suspend this (or maybe forgave this thought) ---- maybe classify that manually  by  users will be fine.
             })})
     //endregion
 
@@ -700,16 +709,20 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
 
     }
-
     //add listener for Scenario rems
     await plugin.event.addListener(AppEvents.RemChanged,sceneHost._id,async ()=>{
         //Note: a rem is representing a scenario only when it is a child of the "sceneHost"
         for(const scene of (await sceneHost.taggedRem()))
         {
-            if(scene.parent!==sceneHost._id)
+
+            if(scene.parent===sceneHost._id)continue
+            let needToRemoveTag=true;
+            for(const docs of await scene.portalsAndDocumentsIn())
             {
-                await scene.removeTag(sceneHost._id)
+                if(docs._id===sceneHost._id)
+                    needToRemoveTag=false
             }
+             needToRemoveTag && await scene.removeTag(sceneHost._id)
         }
     })
     //endregion
@@ -761,6 +774,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         // await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project);
         await getCollectedWithOwnerPrj(r)
 
+        await linkGTDItemToDairy(r)
+
+
         // create a rem named "next action" under the project and
         // tag "next action" with "GTD items"
 
@@ -801,6 +817,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
     const nowListHandler = async (r:Rem)=>{
         await r.setIsTodo(true);
+        await getCollectedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)
         plugin.event.addListener(AppEvents.RemChanged,r._id,async ()=>{
             if((await r.getTodoStatus())==="Finished")
             {
