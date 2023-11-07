@@ -61,6 +61,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     /**
      * a wrap on "genHostPropertiesWithLog" to reassure each of the hosts is unique for their powerUp.
+     * if host does not exist, a new rem will be created for the powerUp as a host and tagged by the powerUp.
      * @param pwCode powerUp code for the root Host
      * @param loggerCode the code of the powerUp to deploy its template onto the root Host
      */
@@ -678,9 +679,10 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     /**
      * the logic to process rems with "r.Scenario" property
      * @param r
+     * @return a boolean value indicating where the rem "r" has property "r.Scenario"
      */
     const getContainedWithScenario=async (r:Rem)=>{
-        //todo Scenario may contains peoples to delegate...
+        //DONE: Scenario may contains peoples to delegate...
 
 
         //get the rems of "r.Scenario" if this property exists.
@@ -692,7 +694,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             if(!newScenario)
             {
                 // await getCollected(r,actionCode);
-                return
+                return false;
             }
             await newScenario?.addTag(sceneHost)
             await r.setTagPropertyValue(sceneHost._id,await plugin.richText.rem(newScenario).value())
@@ -707,22 +709,28 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             }
 
         }
+        return true
 
     }
     //add listener for Scenario rems
+
+
+    let sceneSet:Set<string>|null=null
     await plugin.event.addListener(AppEvents.RemChanged,sceneHost._id,async ()=>{
-        //Note: a rem is representing a scenario only when it is a child of the "sceneHost"
+        if(!sceneSet)return
+        sceneSet=new Set<string>((await sceneHost.getDescendants()).map(r=>r._id))
+        //Note: a rem is representing a scenario only when it is a descendant of the "sceneHost"
         for(const scene of (await sceneHost.taggedRem()))
         {
 
-            if(scene.parent===sceneHost._id)continue
-            let needToRemoveTag=true;
-            for(const docs of await scene.portalsAndDocumentsIn())
-            {
-                if(docs._id===sceneHost._id)
-                    needToRemoveTag=false
+            if(scene.parent===sceneHost._id){
+                //todo maybe this "scene" is actually type of scenes?
+                // answer: a scene classifier is not a scene but a rem whose parent is "sceneHost" and that does not tagged by "sceneHost".
             }
-             needToRemoveTag && await scene.removeTag(sceneHost._id)
+            if ( sceneSet.has(scene._id) ){
+                continue
+            }
+            await scene.removeTag(sceneHost._id)
         }
     })
     //endregion
@@ -759,12 +767,14 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const awaitListHandler=async (r:Rem) =>{
         await getContainedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Delegate)
 
-        //todo if "scenario" does not exists, a toast is needed to inform the user.
-        await getContainedWithScenario(r);
+        //DONE if "scenario" does not exist, a toast is needed to inform the user.
+        if(!await getContainedWithScenario(r))
+        {
+            await plugin.app.toast("Scenario needs to be specified when you wanna delegate it to someone")
+        }
         // XXX : I cannot come up with a better idea in such a haste
         //portal the item into Daily Doc
         await linkGTDItemToDairy(r)
-
         //remove the tag "GTD items"
         await r.removeTag(gtdHost._id)
 
@@ -794,7 +804,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //move the item into the "REFERENCE/Successive Ones" folder
         //await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Reference);
         //DONE (IMPORTANT) : what about the logic when "r" has property "r.OwnerProject"?
-        //todo how to get items contained when the items has other property?
+        //todo (partially done) how to get items contained when the items has other property?
         await getContainedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Reference)
 
 
@@ -864,8 +874,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     let gtdActionQueue=new Set()
     for(const actSlot of await treat_as_slot?.getChildrenRem())
     {
-        const slotHost=await getHostRemOf(actSlot)
-        if(!slotHost)
+        const slotHostAsActOption=await getHostRemOf(actSlot)
+        if(!slotHostAsActOption)
         {
             const slotText=actSlot.text && await plugin.richText.toString(actSlot.text)
             if(slotText)
@@ -879,9 +889,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //"handlerCaller" wraps the handlers to filter the duplicate edit
         const handlerCaller=async ()=>{
 
-            if(slotHost._id!==(await getHostRemOf(actSlot))._id)
+            if(slotHostAsActOption._id!==(await getHostRemOf(actSlot))._id)
             {
-                await plugin.event.removeListener(AppEvents.RemChanged,slotHost._id)
+                await plugin.event.removeListener(AppEvents.RemChanged,slotHostAsActOption._id)
                 return
             }
             let gtdItems=await gtdHost.taggedRem();
@@ -894,22 +904,22 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 else{
                     gtdActionQueue.add(it._id)
                 }
-                // the richText type of value assigning the treatment to a GTD item (e.g. Later/Delegate/SomeDay...)
+                // the richText type of value specifying the expected treatment to a GTD item (e.g. Later/Delegate/SomeDay...)
                 const actVal=await  it.getTagPropertyValue(act_slot_host._id);
-                //todo : the values of Option-type properties will be reference or just duplicate the text in RemNote's default routine?
+                // the option rem is one kind of host that is created and tagged by the powerUp representing the option, and host will implement the functions for the Option-type property
                 const actIds=await plugin.richText.getRemIdsFromRichText(actVal);
                 //the corresponding powerUp of the var "actVal" , for the action to a GTD item
-                const actPw=(await slotHost.getTagRems())[0]
+                const actPw=(await slotHostAsActOption.getTagRems())[0]
                 if(!(actPw&&actPw.text))continue
                 const actCommand=await plugin.richText.toString(actPw.text)
                 if(!actIds.length)continue;
-                if(actIds[0]===slotHost._id)
+                if(actIds[0]===slotHostAsActOption._id)
                 {
                     const handle=handlerMap.get(actCommand.trim());
-                    if(handle&&await isTaggedWithHost(slotHost._id,it)){
-                        await plugin.event.removeListener(AppEvents.RemChanged,slotHost._id)
+                    if(handle&&await isTaggedWithHost(slotHostAsActOption._id,it)){
+                        await plugin.event.removeListener(AppEvents.RemChanged,slotHostAsActOption._id)
                         await handle(it);
-                        await plugin.event.addListener(AppEvents.RemChanged,slotHost._id,handlerCaller)
+                        await plugin.event.addListener(AppEvents.RemChanged,slotHostAsActOption._id,handlerCaller)
                     }
                 }
             }
@@ -920,7 +930,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         }
 
-        await plugin.event.addListener(AppEvents.RemChanged,slotHost._id,handlerCaller)
+        await plugin.event.addListener(AppEvents.RemChanged,slotHostAsActOption._id,handlerCaller)
     }
 
 

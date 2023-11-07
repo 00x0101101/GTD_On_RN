@@ -6,4 +6,5 @@ dist-ssr
 *.zip
 \PluginZip.zip
 \src\widgets\utils.tsx
+ignoredBin
 
