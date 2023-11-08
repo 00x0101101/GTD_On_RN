@@ -12,7 +12,7 @@ const GTD_LOGGER_CODE={
   THE_DATE: "gdat",
   SCENARIO:"scn",
   TIMELINE_TYPE:"gttk",
-  OWNER_PROJECT:"goprj",
+  OWNER_ITEM:"goprj",
   TREAT_AS:"gact",
   MESSAGE:"gmsg"
 }

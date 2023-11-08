@@ -1,7 +1,7 @@
 import {
     AppEvents,
     BuiltInPowerupCodes,
-    filterAsync,
+    filterAsync, PowerupSlotCodeMap,
     PropertyLocation,
     PropertyType,
     ReactRNPlugin,
@@ -11,15 +11,17 @@ import {
     SetRemType,
 } from '@remnote/plugin-sdk';
 import {
-    ACT_OPTIONS_LOGGER_PW_CODE, aspect_containers,
+    ACT_OPTIONS_LOGGER_PW_CODE,
+    aspect_containers,
     GTD_HOST_PW,
     GTD_LOGGER_PW_CODE,
     HostCheckResult,
     HostType,
-    PW2SLOTS, RemPropertyType,
+    PW2SLOTS,
     TIME_TK_PW_CODE,
 } from './consts';
 import moment from 'moment';
+import { userInfo } from 'os';
 
 let utils
 
@@ -237,7 +239,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIME_TICK, 'TIME_TICK',PropertyLocation.ONLY_DOCUMENT, PropertyType.MULTI_SELECT,SelectSourceType.Relation,undefined],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.SCENARIO, 'SCENARIO',PropertyLocation.BELOW , PropertyType.TEXT,undefined,undefined],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE, 'TIMELINE_TYPE',PropertyLocation.BELOW, PropertyType.SINGLE_SELECT,SelectSourceType.Enum,TIME_TK_PW_CODE.TICK_TYPE],
-        [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_PROJECT, 'OWNER_PROJECT',PropertyLocation.BELOW, PropertyType.SINGLE_SELECT,SelectSourceType.AnyRem,undefined],
+        [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_ITEM, 'OWNER',PropertyLocation.BELOW, PropertyType.SINGLE_SELECT,SelectSourceType.AnyRem,undefined],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TREAT_AS, 'TREAT_AS',PropertyLocation.RIGHT, PropertyType.SINGLE_SELECT, SelectSourceType.Enum,allKeyObj(ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS)],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.MESSAGE, 'MESSAGE',PropertyLocation.ONLY_DOCUMENT, PropertyType.TEXT,undefined],
     ];
@@ -365,14 +367,15 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const date_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.THE_DATE)
     const tick_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIME_TICK)
     const tlkPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE)
-    const ownerPrjPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_PROJECT) as Rem
+    const ownerPrjPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_ITEM) as Rem
     const scenePW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE,ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_CONTAINERS.SCENARIO) as Rem
 
     //region Init container Interface(GTD Panel in sidebar)
     const gtdContainerInterface=await plugin.powerup.getPowerupByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE)
-    if(gtdContainerInterface&&(!(await gtdContainerInterface.remsReferencingThis()).length|| (((await gtdContainerInterface.remsReferencingThis())[0].parent)!==sidebar?._id) ))
+    if( gtdContainerInterface&&(!(await gtdContainerInterface.remsReferencingThis()).length|| (((await gtdContainerInterface.remsReferencingThis())[0].parent)!==sidebar?._id) ))
     {
-        await createReferenceFor(gtdContainerInterface,sidebar)
+        const remRef= await createReferenceFor(gtdContainerInterface,sidebar);
+        await remRef.setBackText(await plugin.richText.text("this rem cannot be removed or the container will be duplicated in the sidebar").value())
         // todo :maybe the plugin did not  pass the marketplace check due to operating the sidebar is a premium feature?
         await addToSidebar(gtdContainerInterface)
     }
@@ -405,6 +408,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const ownerPrjHost=await getHostRemOf(ownerPrjPW)
     const sceneHost=await getHostRemOf(scenePW)
     //region Init GTD action hosts and corresponding containers
+
+    await gtdHost.setIsDocument(true);
 
     //region Init containers
     if(act_slot_host)
@@ -619,7 +624,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
      * @param actionCode which container does "r" go?
      * @return a boolean value indicates whether "r" has been got collected by this function
      */
-    const getCollectedWithOwnerPrj=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project)=>{
+    const getCollectedWithOwner=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project)=>{
 
 
         //get the rems of "r.OwnerProject" if this property exists.
@@ -668,8 +673,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     }
 
-    const getContainedWithOwnerPrj=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project)=>{
-        return (await getCollectedWithOwnerPrj(r,actionCode))||(getCollected(r,actionCode))
+    const getContainedWithOwner=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project)=>{
+        return (await getCollectedWithOwner(r,actionCode))||(getCollected(r,actionCode))
     }
 
     //endregion
@@ -752,7 +757,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //remove the tag "GTD items"
             await r.removeTag(gtdHost._id)
             //move r into WAIT list
-            await getContainedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Later)
+            await getContainedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Later)
             //create reference of "r" in Daily Doc
             let rRef=await createReferenceFor(r)
             await linkGTDItemToDairy(r,rRef)
@@ -765,7 +770,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
     }
     const awaitListHandler=async (r:Rem) =>{
-        await getContainedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Delegate)
+        await getContainedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Delegate)
 
         //DONE if "scenario" does not exist, a toast is needed to inform the user.
         if(!await getContainedWithScenario(r))
@@ -782,7 +787,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const projectListHandler=async (r:Rem) =>{
         // move item rem into project folder and remove the tag "GTD items"
         // await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project);
-        await getCollectedWithOwnerPrj(r)
+        await getCollectedWithOwner(r)
 
         await linkGTDItemToDairy(r)
 
@@ -805,7 +810,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Reference);
         //DONE (IMPORTANT) : what about the logic when "r" has property "r.OwnerProject"?
         //todo (partially done) how to get items contained when the items has other property?
-        await getContainedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Reference)
+        await getContainedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Reference)
 
 
         //remove the tag "GTD items"
@@ -827,7 +832,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
     const nowListHandler = async (r:Rem)=>{
         await r.setIsTodo(true);
-        await getCollectedWithOwnerPrj(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)
+        await getCollectedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)
         plugin.event.addListener(AppEvents.RemChanged,r._id,async ()=>{
             if((await r.getTodoStatus())==="Finished")
             {
