@@ -2,7 +2,6 @@ import {
   PropertyLocation,
   PropertyType,
   Rem,
-  RichTextElementInterface,
   RichTextInterface,
   SelectSourceType,
 } from '@remnote/plugin-sdk';

@@ -2,8 +2,6 @@ import { declareIndexPlugin, ReactRNPlugin } from '@remnote/plugin-sdk';
 import '../style.css';
 import { init_PowerUps } from './init_PowerUps';
 
-// import '../App.css';
-
 
 async function onActivate(plugin: ReactRNPlugin) {
 
@@ -14,8 +12,6 @@ async function onActivate(plugin: ReactRNPlugin) {
         await plugin.app.toast("Init Failed- GTD...")
         return
     }
-    const gtdHost=r[0]
-    const gtdTable=r[1]
 
 
 
