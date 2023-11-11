@@ -324,7 +324,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIME_TICK, 'TIME_TICK',PropertyLocation.ONLY_DOCUMENT, PropertyType.MULTI_SELECT,SelectSourceType.Relation,undefined],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.SCENARIO, 'SCENARIO',PropertyLocation.BELOW , PropertyType.TEXT,undefined,undefined],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE, 'TIMELINE_TYPE',PropertyLocation.BELOW, PropertyType.SINGLE_SELECT,SelectSourceType.Enum,TIME_TK_PW_CODE.TICK_TYPE],
-        [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_ITEM, 'OWNER',PropertyLocation.BELOW, PropertyType.SINGLE_SELECT,SelectSourceType.AnyRem,undefined],
+        [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_ITEM, 'OWNER_ITEM',PropertyLocation.BELOW, PropertyType.SINGLE_SELECT,SelectSourceType.AnyRem,undefined],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TREAT_AS, 'TREAT_AS',PropertyLocation.RIGHT, PropertyType.SINGLE_SELECT, SelectSourceType.Enum,allKeyObj(ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS)],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.MESSAGE, 'MESSAGE',PropertyLocation.ONLY_DOCUMENT, PropertyType.TEXT,undefined],
     ];
@@ -474,12 +474,13 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
 
 
-    const timeLineTypeHost=await getHostRemOf(tlkPW)
-    const gtdHost=await getHostRemOf(gtd_host_pw)
-    const dateHost=await getHostRemOf(date_host_pw)
-    const tickHost=await getHostRemOf(tick_host_pw)
-    const ownerPrjHost=await getHostRemOf(ownerPrjPW)
-    const sceneHost=await getHostRemOf(scenePW)
+    const timeLineTypeHost=await getHostRemOf(tlkPW);
+    const gtdHost=await getHostRemOf(gtd_host_pw);
+    const dateHost=await getHostRemOf(date_host_pw);
+    const tickHost=await getHostRemOf(tick_host_pw);
+    const ownerPrjHost=await getHostRemOf(ownerPrjPW);
+    const sceneHost=await getHostRemOf(scenePW);
+    await sceneHost.setIsDocument(true);
     //region Init GTD action hosts and corresponding containers
 
     await gtdHost.setIsDocument(true);
@@ -758,13 +759,15 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     //region Functions to handle the "Scenario" property
 
     /**
-     * the logic to process rems with "r.Scenario" property
+     * the logic to process rems with "r.Scenario" property. it will
+     * 1. get scenario contained and cached in the host tableview.
      * @param r
      * @return a boolean value indicating where the rem "r" has property "r.Scenario"
      */
     const getContainedWithScenario=async (r:Rem)=>{
         //DONE: Scenario may contains peoples to delegate...
 
+        //region get scenario contained and cached in the host tableview.
 
         //get the rems of "r.Scenario" if this property exists.
         const scenarioAsRem=await getPropertyOfRemAsRem(r,sceneHost._id)
@@ -790,6 +793,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             }
 
         }
+        //endregion
         return true
 
     }
@@ -830,15 +834,14 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         if(dateDocL.length)
         {
-            //remove the tag "GTD items"
-            await r.removeTag(gtdHost._id)
+
             //move r into WAIT list
             await getContainedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Later)
             //create reference of "r" in Daily Doc
             let rRef=await createReferenceFor(r)
             await linkGTDItemToDairy(r,rRef)
-
-
+            //remove the tag "GTD items"
+            await r.removeTag(gtdHost._id)
         }
         else
         {
@@ -897,11 +900,13 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.WasteBin);
         //portal the item into Daily Doc
         await linkGTDItemToDairy(r);
+
+
         //remove the GTD tag and related properties
         await r.removeTag(gtdHost._id)
     }
     const wishesListHandler = async (r:Rem) =>{
-        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.SomeDay);
+        await getContainedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.SomeDay);
         //move the item into Daily Doc
         if(!await linkGTDItemToDairy(r))
         {
@@ -909,10 +914,15 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //todo : maybe a default option for "Tick Type" named "unspecified"?
             // or just enable users to setup their own properties under the properties?
             // (partially done: `getPropertyRemOfHostAsRemWithBuiltinOptions` ready)
+
             const propRem= await setUpEnumValForHostProperty(r,timeLineTypeHost,TIME_TK_PW_CODE.TICK_TYPE.LOG)
             await propRem?.setEnablePractice(true);
             await propRem?.setPracticeDirection("forward");
-            await plugin.app.toast("a Date to reminder you is needed");
+            await plugin.app.toast("Date to reminder is default.").then(()=>{
+                setInterval(()=>{
+                    plugin.app.toast(" so the Rem has been added to practice queue to reminder");
+                },1200)
+            });
             return
         }
         //remove the GTD tag and related properties
@@ -975,7 +985,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             // await plugin.app.toast(slotText+" is nowhere to be found...")
 
 
-            //region ( having been commented)  FOR MY DEV USE:remove the powerUps unexpectedly created due to previous before
+            //region (HAVING BEEN COMMENTED)  FOR MY DEV USE:remove the powerUps unexpectedly created due to previous before
             //  if(!actSlot.isTable())await actSlot.remove();
             //endregion
 
@@ -992,7 +1002,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
             if(slotHostAsActOption._id!==(await getHostRemOf(actSlot))._id)
             {
-                await plugin.event.removeListener(AppEvents.RemChanged,slotHostAsActOption._id)
+                plugin.event.removeListener(AppEvents.RemChanged,slotHostAsActOption._id)
                 return
             }
             let gtdItems=await gtdHost.taggedRem();
