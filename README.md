@@ -82,7 +82,7 @@ These options are listed below, with its default name and the action it exerts t
     - Then the item will be linked to the DailyDoc of `THE_DATE` (If exists)
 4.  When an item is "treated_as" a **Project**, it will
     - get collected or linked by its owner IN THE DEFAULT WAY as a subproject(if value of `OWENER_ITEM` exist)
-    - a new GTD item named `Next Action` will be created whose owner is this `Project` item.
+    - a new GTD item named `Next Action of [[r]]`  will be created whose owner is this `Project` item.
 5.  When an item is "treated_as" an item to be done **Later**, it will be collected and linked IN THE DEFAULT WAY *ONLY WHEN* value of `THE_DATE` is specified.
 6.  When an item needs to be done for **Now**
     - the item will be collected or linked IN THE DEFAULT WAY
@@ -92,3 +92,11 @@ These options are listed below, with its default name and the action it exerts t
     - Then the property-value pair `TREAT_AS: wastebin` will be added into the practice queue as a reminder.
 
 //you can think it as an interactive Notion template. 🙂
+
+
+TODO:
+    - [ ] Introduce "Natural Planning Model" into **Project** items.
+    - [ ] Wait for RN plugin team to support the Enum type of PowerUps not only in APIs Sincerely.
+    ![](https://github.com/00x0101101/GTD_On_RN/blob/main/public/toturials/Quicker_20231113_211711.png)
+    ![](https://github.com/00x0101101/GTD_On_RN/blob/main/public/toturials/Quicker_20231113_211959.png)
+    

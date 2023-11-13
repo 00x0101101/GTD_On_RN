@@ -308,7 +308,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             code: TIME_TK_PW_CODE.TICK_SLOT,
             name: 'TickType',
             onlyProgrammaticModifying: true,
-            hidden: true,
+            hidden: false,
             propertyLocation:PropertyLocation.BELOW,
             enumValues:TIME_TK_PW_CODE.TICK_TYPE,
             defaultEnumValue:TIME_TK_PW_CODE.TICK_TYPE.LOG
@@ -567,7 +567,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
      *
      * when `type==="Rem"` and the property to return contains a reference, but the Rem cannot be found (e.g. Privacy Rem or Deleted Rem), the function will return this id despite the "type" parameter
      */
-    async function getPropertyOfRemAsRem(r:Rem,propertyId:string) {
+    async function getPropertyOfRemAsRems(r:Rem,propertyId:string) {
         let propertyRichText=await r.getTagPropertyValue(propertyId)
         let results:string[];
         results=await plugin.richText.getRemIdsFromRichText(propertyRichText)
@@ -615,7 +615,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
      */
     async function getDateRemIdWithProperty(r:Rem) {
 
-        return await getPropertyOfRemAsRem(r,dateHost._id) as Rem[]
+        return await getPropertyOfRemAsRems(r,dateHost._id) as Rem[]
 
         // //add DDL (Sometimes with Time tick) and informing Date into corresponding DailyDoc
         // let date=await r.getTagPropertyValue(dateHost._id);
@@ -649,22 +649,29 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 (tickRemL.length===0 ? await setupStampWithRichText(dateRem,tick): await plugin.rem.findOne(tickRemL[0]))
                 : dateRem;
 
-
+            // copy the Priority (timeline type) from the item's property to the time tick's one.
             if(stamp)
             {
                 await link.setParent(stamp);
-
                 // Time ticks add in the previous step need to be tagged with PW "TimeTick" and assign the property "TickType"
-                // Change the property name "DDL" under "GTD Items" to "the DATE" and Add a property "DATE Type" with "Deadline/Warning/Informing/Log" to select
+                //DONE: Change the property name "DDL" under "GTD Items" to "the DATE" and Add a property "DATE Type" with "Deadline/Warning/Informing/LogTick" to select
 
-                if(await stamp.hasPowerup(TIME_TK_PW_CODE.TICK_PW))
+                const timeLineType=await r.getTagPropertyValue(timeLineTypeHost._id);
+                if(await stamp.hasPowerup(TIME_TK_PW_CODE.TICK_PW)&&timeLineType.length)
                 {
-                    const timeLineType=await r.getTagPropertyValue(timeLineTypeHost._id);
-                    const slotRem=await plugin.powerup.getPowerupSlotByCode(TIME_TK_PW_CODE.TICK_PW,await plugin.richText.toString(timeLineType));
-                    if(slotRem)
+                    const slotRem=await plugin.powerup.getPowerupSlotByCode(TIME_TK_PW_CODE.TICK_PW,TIME_TK_PW_CODE.TICK_SLOT);
+                    if(!slotRem)await plugin.app.toast("Where is the slot : "+ TIME_TK_PW_CODE.TICK_SLOT)
+                    else
                     {
-                        const slotVal=await plugin.richText.rem(slotRem).value();
-                        await stamp.setPowerupProperty(TIME_TK_PW_CODE.TICK_PW,TIME_TK_PW_CODE.TICK_SLOT,slotVal);
+
+                        for( const opt of await slotRem?.getChildrenRem())
+                        {
+                             if(opt.text&&await plugin.richText.equals(opt.text,timeLineType)&&await opt.isPowerupEnum())
+                             {
+                                 const slotVal=await plugin.richText.rem(opt).value();
+                                 await stamp.setPowerupProperty(TIME_TK_PW_CODE.TICK_PW,TIME_TK_PW_CODE.TICK_SLOT,slotVal);
+                             }
+                        }
                     }
                 }
             }
@@ -705,7 +712,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
 
         //get the rems of "r.OwnerProject" if this property exists.
-        const ownerPropertyAsRem=await getPropertyOfRemAsRem(r,ownerPrjHost._id)
+        const ownerPropertyAsRem=await getPropertyOfRemAsRems(r,ownerPrjHost._id)
         //if the property value is text without rem references.
         if(!ownerPropertyAsRem||ownerPropertyAsRem.length===0)
         {
@@ -770,7 +777,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //region get scenario contained and cached in the host tableview.
 
         //get the rems of "r.Scenario" if this property exists.
-        const scenarioAsRem=await getPropertyOfRemAsRem(r,sceneHost._id)
+        const scenarioAsRem=await getPropertyOfRemAsRems(r,sceneHost._id)
         //if the property value is text without rem references.
         if(!scenarioAsRem||scenarioAsRem.length === 0)
         {
@@ -877,9 +884,10 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         const next=await plugin.rem.createRem();
         if(next)
         {
-            await next.setText(["Next Action"]);
+            await next.setText(await plugin.richText.text("Next Action of ").rem(r).value());
             await next.setParent(r);
             await next.addTag(gtdHost);
+            await next.setTagPropertyValue(ownerPrjHost._id,await plugin.richText.rem(r).value())
         }
         //remove the tag "GTD items"
         await r.removeTag(gtdHost._id)
