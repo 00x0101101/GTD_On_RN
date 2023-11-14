@@ -624,10 +624,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         return await getPropertyOfRemAsRems(r,dateHost._id) as Rem[]
 
-        // //add DDL (Sometimes with Time tick) and informing Date into corresponding DailyDoc
-        // let date=await r.getTagPropertyValue(dateHost._id);
-        // // let dateDoc=(dailyDocPW ?  await plugin.search.search(date,dailyDocPW,{numResults:1}):  await plugin.search.search(date))[0]
-        // return await plugin.richText.getRemIdsFromRichText(date);
+
     }
     /**
      * link gtd item "r" to the daily doc and time stamp the property "r.THE_DATE" and "r.TIME_TICK" specify.
@@ -927,14 +924,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //DONE (IMPORTANT) : what about the logic when "r" has property "r.OwnerProject"?
         //todo how to get items contained when the items has other property?
         // (partially done:SCENARIO/DATE/OWNER have their containing logic)
-        //todo
         await getContainedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Reference)
 
-        // const state = await getCollectedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Reference);
-        // if((state===OwnerState.INVALID_4_SRC_NOT_EXIST||state===OwnerState.NOT_UNIQUE))
-        // {
-        //     await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Reference,OwnerState.INVALID_4_SRC_NOT_EXIST===state)
-        // }
+
 
 
         //remove the tag "GTD items"
@@ -1056,13 +1048,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 let gtdItems=await gtdHost.taggedRem();
                 for(const it of gtdItems)
                 {
-                    // if(gtdActionQueue.has(it._id))
-                    // {
-                    //    continue
-                    // }
-                    // else{
-                    //     gtdActionQueue.add(it._id)
-                    // }
+
                     // the richText type of value specifying the expected treatment to a GTD item (e.g. Later/Delegate/SomeDay...)
                     const actVal=await  it.getTagPropertyValue(act_slot_host._id);
                     // the option rem is one kind of host that is created and tagged by the powerUp representing the option, and host will implement the functions for the Option-type property
@@ -1082,10 +1068,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                         }
                     }
                 }
-                // for(const it of gtdItems)
-                // {
-                //     // gtdActionQueue.delete(it._id)
-                // }
+
             }
             gtdActionQueue2= gtdActionQueue2 ? gtdActionQueue2.then(nextActFun):nextActFun()
         }
