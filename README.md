@@ -89,14 +89,21 @@ These options are listed below, with its default name and the action it exerts t
     - its tag `Host` won't be removed like other treatments do. the rem will be tagged as a todo.
 7.  `WasteBin` : when an item is "treated_as" what needs to be in the **WasteBin**
     - The item will be linked to dailyDoc `THE_DATE` specified. 
-    - Then the property-value pair `TREAT_AS: wastebin` will be added into the practice queue as a reminder.
+    - Then the property-value pair `TREAT_AS:: wastebin` will be added into the practice queue as a reminder
+    - The proficiency of this card can give you a reference to decide whether to delete this item in the `WasteBin`
 
 //you can think it as an interactive Notion template. 🙂
 
 
-TODO:
-    - [ ] Introduce "Natural Planning Model" into **Project** items.
-    - [ ] Wait for RN plugin team to support the Enum type of PowerUps not only in APIs Sincerely.
-    ![](https://github.com/00x0101101/GTD_On_RN/blob/main/public/toturials/Quicker_20231113_211711.png)
-    ![](https://github.com/00x0101101/GTD_On_RN/blob/main/public/toturials/Quicker_20231113_211959.png)
+## ROADMAP
+- [ ] Introduce "Natural Planning Model" into **Project** items.
+    
+- [ ] Wait for RN plugin team to support the Enum type of PowerUps not only in APIs.
+
+![](https://github.com/00x0101101/GTD_On_RN/blob/main/public/toturials/Quicker_20231113_211711.png)
+
+![](https://github.com/00x0101101/GTD_On_RN/blob/main/public/toturials/Quicker_20231113_211959.png)
+
+
+- [ ] (not sure yet) Interaction and/or Integration with [The-Three-Body-Theme](https://github.com/Ekuboh/The-Three-Body-Theme) 
     

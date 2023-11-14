@@ -78,10 +78,8 @@ export const TIME_TK_PW_CODE =  {
   TICK_SLOT:"tkty",
   TICK_TYPE:tickType
 }
-export const TTK_LOGGER_PW_CODE={
-  LOGGER_PW: "gtd_ttk_engine",
-  LOGGER_SLOTS:tickType
-}
+
+
 
 // mapping type
 // see [code example](https://www.typescriptlang.org/play?#code/FASwdgLgpgTgZgQwMZQAQDUEBsCuUDOqqA3sEUQgFyr4QzgDmZ5ARtWDgLYuzNEDaAaygBParXpgGAXWo4wgsAHsA7mGABfYMAgiADmgAKqALyphIpXAzY8+HfrQAVUzdwF+AcgSfpDg6gAyq6Y7vheLL7acPJIECBKYKgg+ADSovgAFBZyCspqAJTUFsmExqTkqDBQEDgwSSUmTajenqgAPu3moqbNnpGa0bHxiagMNaF4ADzpIqhQAB7QYAAmZQB82aLUs0VudvyzfjFgcQlJ4xCTUFtiNHSMe-KKqkkV5EiJtPdK1dTXhDM70qFGoACIABJQLBYJRggA0fBBbFQAEYAEwAZkRlS0SJA1kyKVmWQsBQKJCRlWqtXqP2qQlEflx2mpNTqSVovygjJEfjxAHoBagkKV7pImJ8wN9RWZLtdMq0CsAhagVmKONxeFLvuq5RNbDd+p5laqlBAABawQgpVDPfLqHUQeaueWGzJgmJIQSoS1oFS-LArMEFIA)
@@ -102,11 +100,14 @@ export class eventCombo{
   host:string|undefined
 }
 export enum HostCheckResult {
-  PW_NOT_EXIST=-1,
-  HOST_NOT_UNIQUE=3,
-  HOST_NOT_EXIST=2,
-  HOST_UNIQUE=1
+  INVALID_4_SRC_NOT_EXIST=-1,
+  NOT_UNIQUE=3,
+  NOT_EXIST=2,
+  UNIQUE=1
 }
+
+export const OwnerState = HostCheckResult
+
 export enum HostType{
   PROPERTY = 1,
   OPTIONS = 2,
