@@ -99,11 +99,23 @@ export class eventCombo{
   slotRef:string|undefined;
   host:string|undefined
 }
+
+/**
+ *
+ */
 export enum HostCheckResult {
-  INVALID_4_SRC_NOT_EXIST=-1,
-  NOT_UNIQUE=3,
-  NOT_EXIST=2,
-  UNIQUE=1
+
+
+  INVALID_4_SRC_NOT_EXIST=-1,// property value is void.
+
+
+  NOT_UNIQUE=3,// there are multiple rems being referenced by this property.
+
+
+  NOT_EXIST=2,// property value is text without reference(s) to any rems.
+
+
+  UNIQUE=1 // property value has referenced only one rem.
 }
 
 export const OwnerState = HostCheckResult
