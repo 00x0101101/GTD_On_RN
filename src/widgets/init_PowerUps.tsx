@@ -228,11 +228,27 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         await newRem.setText(text);
         return newRem
     }
-    // literally. `undefined` will be returned if portal is failed to create
-    const createPortalFor=async (r:Rem)=>{
+    //
+    /**
+     * literally. `undefined` will be returned if portal is failed to create
+     * @param r
+     * @param uniqUnder if set, duplicate portal within the children of `uniqUnder` will be removed
+     */
+    const createPortalFor=async (r:Rem,uniqUnder:undefined|Rem=undefined)=>{
+
+        if(uniqUnder)
+        {
+           for(const por of await r.portalsAndDocumentsIn())
+           {
+               if(por.parent===uniqUnder._id)
+                   return por;
+           }
+        }
+
         const portal=await plugin.rem.createPortal();
         if(!portal)return;
         await r.addToPortal(portal);
+        if(uniqUnder)await r.setParent(uniqUnder)
         return portal;
     }
     /**
@@ -578,7 +594,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
         if(!containerPW)return
         const container=await getHostRemOf(containerPW)
-        container && ( indirectMoveByPortal? (await createPortalFor(r))?.setParent(container) : r.parent!==container._id &&  await r.setParent(container));
+        container && ( indirectMoveByPortal? (await createPortalFor(r,container)) : r.parent!==container._id &&  await r.setParent(container));
         return container
     }
 
@@ -657,8 +673,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const linkGTDItemToDairy=async (r:Rem,link?:Rem)=>{
         const dateRems=await getDateRemIdWithProperty(r);
         if(!dateRems)return;
-        link = link || await createPortalFor(r);
-        if(dateRems.length&&link)
+
+        if(dateRems.length)
         {
             const dateRem=dateRems[0]
             //get the "time tick" property
@@ -680,7 +696,10 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             // copy the Priority (timeline type) from the item's property to the time tick's one.
             if(stamp)
             {
-                await link.setParent(stamp);
+                link || await createPortalFor(r,stamp);
+                // await link.setParent(stamp);
+
+
                 // Time ticks add in the previous step need to be tagged with PW "TimeTick" and assign the property "TickType"
                 //DONE: Change the property name "DDL" under "GTD Items" to "the DATE" and Add a property "DATE Type" with "Deadline/Warning/Informing/LogTick" to select
 
@@ -975,14 +994,18 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 // create a rem named "next action" under the project and
                 // tag "next action" with "GTD items"
 
-                const next=await plugin.rem.createRem();
-                if(next)
-                {
-                    await next.setText(await plugin.richText.text("Next Action of ").rem(r).value());
-                    await next.setParent(r);
-                    await next.addTag(gtdHost);
-                    await next.setTagPropertyValue(ownerPrjHost._id,await plugin.richText.rem(r).value())
-                }
+                const next=await createReferenceFor(r,r);
+                await next.setText(await plugin.richText.text("Next Action of ").rem(r).value());
+
+
+                // const next=await plugin.rem.createRem();
+                // if(next)
+                // {
+                //     await next.setText(await plugin.richText.text("Next Action of ").rem(r).value());
+                //     await next.setParent(r);
+                //     await next.addTag(gtdHost);
+                //     await next.setTagPropertyValue(ownerPrjHost._id,await plugin.richText.rem(r).value())
+                // }
             }
 
         })
