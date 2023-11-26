@@ -2,6 +2,7 @@ import {
     AppEvents,
     BuiltInPowerupCodes,
     filterAsync,
+    PORTAL_TYPE,
     PropertyLocation,
     PropertyType,
     ReactRNPlugin,
@@ -16,12 +17,12 @@ import {
     GTD_LOGGER_PW_CODE,
     HostCheckResult,
     HostType,
+    OwnerState,
     PW2SLOTS,
     TIME_TK_PW_CODE,
-    OwnerState
 } from './consts';
 import moment from 'moment';
-import _ from "lodash"
+import _ from 'lodash';
 
 export let utils:{[key:string]:(...args: any[])=> any }
 
@@ -213,6 +214,61 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     //region util Functions
 
+    /**
+     * todo:
+     * a function wrapping `rem.setText` to detect explosive rem creation with duplicate context
+     * to protect users' note from potential crash on this plugin
+     */
+    const updateRemTextWithCreationDebounce=async ()=>{
+
+    }
+    /**
+     * tag children of `r` to be a GTD Item except for children which is "Finished To-Do"
+     * @param r
+     */
+    const tagSubItem=async (r:Rem)=>{
+        if(await r.isTodo()&&"Finished"===await r.getTodoStatus())
+            return;
+
+        if(await r.getPortalType()===PORTAL_TYPE.PORTAL)
+            return;
+        //
+        //the checker should work after `r` having gotten contained.
+
+
+        let hasGotSubItem=false;
+
+        for(const child of await r.getChildrenRem())
+        {
+            if(await child.isTodo()&&"Finished"===await child.getTodoStatus())
+                continue;
+            if(child.text&&await plugin.richText.length(child.text))
+            {
+
+                const rRefs = await child.remsBeingReferenced();
+
+                //if the child is a rem containing property values, it will not be added as a GTD item by this function
+
+                const resultArr=await Promise.all(rRefs.map(rr=>rr.isProperty()))
+                let suitForTag=!resultArr.filter(_.identity).length;
+
+                if(suitForTag)
+                {
+                    await child.addTag(gtdHost);
+                    hasGotSubItem=true;
+                }
+            }
+        }
+        //unexpected recurrent won't occur
+        //for the sub-item has not been project yet
+        //fixed: this thought is wrong for the creation of ref `next` will trigger the listener of `r`—— debounce filter has been added in `createReferenceFor`
+        if(!hasGotSubItem)
+        {
+            const next=await createReferenceFor(r,r);
+            await next.setText(await plugin.richText.text("Next Action of ").rem(r).value());
+        }
+    }
+
     const dropOutRedundantLink =async (r:Rem,condition:(arg0: Rem)=>Promise<boolean>) => {
         for(const refR of await r.remsReferencingThis())
         {
@@ -254,7 +310,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     /**
      * create a reference rem for "r"
      * @param r the rem to reference
-     * @param refParent if this parameter exists, the ref rem will be placed under this.
+     * @param refParent If this parameter exists, the ref rem will be placed under this.
+     *        If this parameter exists and there has already been a ref under `r`, the existing ref will be returned without creating a new rem.
      */
     const createReferenceFor=async (r:Rem,refParent?:Rem)=>{
         if(refParent)
@@ -517,6 +574,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const ownerPrjHost=await getHostRemOf(ownerPrjPW);
     const sceneHost=await getHostRemOf(scenePW);
     await sceneHost.setIsDocument(true);
+
+
     //region Init GTD action hosts and corresponding containers
 
     // const nowContainerHost
@@ -569,22 +628,21 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             const focus=await plugin.focus.getFocusedRem()
             focus?.addPowerup(TIME_TK_PW_CODE.TICK_PW)
         }
-
     })
 
     //endregion
 
-    //region Functions for GTD panel in sidebar
+    //region Functions for GTD panel with containers in sidebar
 
     /**
      * move GTD item "r" into one container rem in the Container Panel
      *
      * (collect, contain and complete the GTD items to become the conqueror of our daily issue \^_\^ )
-     * @param r GTD items to contain
+     * @param r GTD items to contain, if left void, the container will be returned without any
      * @param containerCode the code specifying the container rem
      * @param indirectMoveByPortal  if set to be true, `r` will get collected by leaving a portal under its owner instead of being moved to that one directly
      */
-    const getCollected = async (r:Rem,containerCode:string,indirectMoveByPortal:boolean=false) => {
+    const getCollected = async (r:Rem|undefined,containerCode:string,indirectMoveByPortal:boolean=false) => {
         let containerPW
         try {
             containerPW=(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,containerCode));
@@ -594,12 +652,28 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
         if(!containerPW)return
         const container=await getHostRemOf(containerPW)
-        container && ( indirectMoveByPortal? (await createPortalFor(r,container)) : r.parent!==container._id &&  await r.setParent(container));
+        container &&r  && ( indirectMoveByPortal? (await createPortalFor(r,container)) : r.parent!==container._id &&  await r.setParent(container));
         return container
     }
 
 
     //endregion
+
+    const prjContainer=await getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project) as Rem;
+    plugin.event.addListener(AppEvents.RemChanged,prjContainer._id,async ()=>{
+
+        for(const prjlike of await prjContainer.getChildrenRem())
+        {
+            if(prjlike.text&&await plugin.richText.length(prjlike.text))
+            {
+                if(!(await prjlike.isTable())&&!(await prjlike.isProperty())){
+                    await tagSubItem(prjlike)
+                }
+            }
+        }
+    })
+
+
 
     //region Functions for properties handling (except "Treat as" actions.)
 
@@ -802,7 +876,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             {
                 const owner=ownerPropertyAsRems[0]
                 await r.setParent(owner)
-                await getCollected((await createReferenceFor(r)) as Rem, actionCode)
+                await createReferenceFor(r,await getCollected(undefined,actionCode))
                 return OwnerState.UNIQUE
             }
             //when this item belongs to multiple project.
@@ -948,66 +1022,26 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const projectListHandler=async (r:Rem) =>{
         // move item rem into project folder and remove the tag "GTD items"
         // await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project);
-        await getContainedWithOwner(r)
+        const q= getContainedWithOwner(r)
 
         await linkGTDItemToDairy(r)
 
         //the children of a project item should be a GTD item by default(except rems containing properties)
         plugin.event.addListener(AppEvents.RemChanged,r._id,async ()=>{
-            let removeNow=true;
+            let itemTagRemoved=true;
             for(const tag of await r.getTagRems())
             {
-                if(tag._id===gtdHost._id)removeNow=false;
+                if(tag._id===gtdHost._id)itemTagRemoved=false;
             }
-            const container=await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project)
-            if(!container||(removeNow && r.parent !== container._id))
+            if(itemTagRemoved)
             {
                 plugin.event.removeListener(AppEvents.RemChanged,r._id);
-                return;
+                return
             }
 
-            let hasGotSubItem=false;
-
-            for(const child of await r.getChildrenRem())
-            {
-                if(child.text&&await plugin.richText.length(child.text))
-                {
-
-                    const rRefs = await child.remsReferencingThis()
-
-                    //if the child is a rem containing property values, it will not be added as a GTD item by this function
-
-                    const resultArr=await Promise.all(rRefs.map(r=>r.isProperty()))
-                    let suitForTag=!!resultArr.filter(_.identity).length;
-
-                    if(suitForTag)
-                    {
-                        await child.addTag(gtdHost);
-                        hasGotSubItem=true;
-                    }
-                }
-            }
-            // if the project `r` has not gotten a sub item yet.
-            if(!hasGotSubItem)
-            {
-
-                // create a rem named "next action" under the project and
-                // tag "next action" with "GTD items"
-
-                const next=await createReferenceFor(r,r);
-                await next.setText(await plugin.richText.text("Next Action of ").rem(r).value());
-
-
-                // const next=await plugin.rem.createRem();
-                // if(next)
-                // {
-                //     await next.setText(await plugin.richText.text("Next Action of ").rem(r).value());
-                //     await next.setParent(r);
-                //     await next.addTag(gtdHost);
-                //     await next.setTagPropertyValue(ownerPrjHost._id,await plugin.richText.rem(r).value())
-                // }
-            }
-
+            await q.then(async ()=>{
+                await tagSubItem(r);
+            })
         })
 
         //remove the tag "GTD items"
@@ -1049,11 +1083,11 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             const propRem= await setUpEnumValForHostProperty(r,tlkPW,TIME_TK_PW_CODE.TICK_TYPE.LOG)
             await propRem?.setEnablePractice(true);
             await propRem?.setPracticeDirection("forward");
-            await plugin.app.toast("Date to reminder is default.").then(()=>{
-                setTimeout(()=>{
-                    plugin.app.toast(" so the Rem has been added to practice queue to reminder");
-                },1200)
-            });
+            // await plugin.app.toast("Date to reminder is default.").then(()=>{
+            //     setTimeout(()=>{
+            //         plugin.app.toast(" so the Rem has been added to practice queue to reminder");
+            //     },1200)
+            // });
 
         }
         //remove the GTD tag and related properties
@@ -1138,10 +1172,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //so there may be "concurrent" conflicts between these handlers, which will duplicate the edits to Rems.
         //"handlerCaller" wraps the handlers to filter the duplicate edit
         const handlerCaller=async ()=>{
-            // const nextActFun=async ()=>{
-            //
-            //
-            // }
+
 
             if(slotHostAsActOption._id!==(await getHostRemOf(actSlot))._id)
             {
@@ -1149,6 +1180,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 return
             }
             let gtdItems=await gtdHost.taggedRem();
+            // let handlerQueue:Promise<void>|null=null;
             for(const it of gtdItems)
             {
 
@@ -1165,9 +1197,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 {
                     const handle=handlerMap.get(actCommand.trim());
                     if(handle&&await isTaggedWithHost(gtdHost._id,it)){
-                        //plugin.event.removeListener(AppEvents.RemChanged,slotHostAsActOption._id)
+                        //handlerQueue=handlerQueue ? handlerQueue.then(async ()=>{await handle(it);}) : handle(it);
                         await handle(it);
-                        //plugin.event.addListener(AppEvents.RemChanged,slotHostAsActOption._id,handlerCaller)
                     }
                 }
             }

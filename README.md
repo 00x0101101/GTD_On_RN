@@ -83,11 +83,12 @@ These options are listed below, with its default name and the action it exerts t
 4.  When an item is "treated_as" a **Project**, it will
     - get collected or linked by its owner IN THE DEFAULT WAY as a subproject(if value of `OWENER_ITEM` exist)
     - a new GTD item named `Next Action of [[r]]`  will be created whose owner is this `Project` item.
+    - all valid direct children of a **Project** will become GTD items. A valid children of **Project** should be neither a Finished Todo nor something like a portal/tableView/property/etc. 
 5.  When an item is "treated_as" an item to be done **Later**, it will be collected and linked IN THE DEFAULT WAY *ONLY WHEN* value of `THE_DATE` is specified.
 6.  When an item needs to be done for **Now**
     - the item will be collected or linked IN THE DEFAULT WAY
     - its tag `Host` won't be removed like other treatments do. the rem will be tagged as a todo.
-7.  `WasteBin` : when an item is "treated_as" what needs to be in the **WasteBin**
+7.  When an item is "treated_as" what needs to be in the **WasteBin**
     - The item will be linked to dailyDoc `THE_DATE` specified. 
     - Then the property-value pair `TREAT_AS:: wastebin` will be added into the practice queue as a reminder
     - The proficiency of this card can give you a reference to decide whether to delete this item in the `WasteBin`
