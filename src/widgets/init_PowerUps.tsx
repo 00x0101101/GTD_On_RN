@@ -44,6 +44,12 @@ const reverseObj=(obj:{[key:string]:string})=>{
 }
 //endregion
 
+
+let  gtdListenerQueue=new Promise<void>((resolve, reject)=>{resolve()})
+
+
+
+
 export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     //region Functions to deploy templates from powerUps to hosts
@@ -152,10 +158,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
 
         await property?.addTag(slot)
-        slot.text &&  await property?.setText(slot.text);
-        await property?.setIsProperty(options===HostType.PROPERTY)
-
-        return property
+        slot.text &&   await updateRemTextWithCreationDebounce(property,slot.text)  // await property?.setText(slot.text);
+        await property?.setIsProperty(options===HostType.PROPERTY);
+        return property;
     }
 
     /**
@@ -214,24 +219,59 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     //region util Functions
 
+    const debounceMap=new Map<string,number>();
+    const freqLimitsPerSpan=5;
+    const freqSpanInMS=1500;
+    let spanTimerHandler:NodeJS.Timer|null=null;
     /**
      * todo:
      * a function wrapping `rem.setText` to detect explosive rem creation with duplicate context
      * to protect users' note from potential crash on this plugin
      */
-    const updateRemTextWithCreationDebounce=async ()=>{
+    async function updateRemTextWithCreationDebounce (r:Rem|undefined,text:RichTextInterface){
+        const hashKey=text.length.toString()+","+await plugin.richText.length(text);
+        const freqPerSpan=debounceMap.get(hashKey);
 
+
+        if(typeof freqPerSpan!=='number')
+        {
+            debounceMap.set(hashKey,0);
+            return
+        }
+
+        if(freqPerSpan>freqLimitsPerSpan)
+        {
+            await plugin.app.toast("Crash happened in GTD Plugin.").then(()=>{
+                setTimeout(()=>{
+                    plugin.app.toast("Please contact plugin author by committing a GitHub issue");
+                },3000)
+            })
+            throw new Error("Duplicate rem created violently");
+
+        }
+        if(!spanTimerHandler)
+            spanTimerHandler=setInterval(()=>{
+                debounceMap.clear();
+            },freqSpanInMS)
+        debounceMap.set(hashKey,freqPerSpan+1);
+
+        r?.setText(text);
     }
+
+
+
     /**
-     * tag children of `r` to be a GTD Item except for children which is "Finished To-Do"
+     * tag children of `r` to be a GTD Item which is leaf rem without tag "Finished To-Do"
      * @param r
      */
     const tagSubItem=async (r:Rem)=>{
         if(await r.isTodo()&&"Finished"===await r.getTodoStatus())
             return;
 
-        if(await r.getPortalType()===PORTAL_TYPE.PORTAL)
-            return;
+        // if(await r.getPortalType()===PORTAL_TYPE.PORTAL)
+        //     return;
+
+
         //
         //the checker should work after `r` having gotten contained.
 
@@ -244,7 +284,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 continue;
             if(child.text&&await plugin.richText.length(child.text))
             {
-
+                if((await child.getChildrenRem()).length!==0)
+                    continue;
                 const rRefs = await child.remsBeingReferenced();
 
                 //if the child is a rem containing property values, it will not be added as a GTD item by this function
@@ -264,8 +305,10 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //fixed: this thought is wrong for the creation of ref `next` will trigger the listener of `r`—— debounce filter has been added in `createReferenceFor`
         if(!hasGotSubItem)
         {
+            //fixme : Duplicate creation error triggered here "from argument `prjLike`"
             const next=await createReferenceFor(r,r);
-            await next.setText(await plugin.richText.text("Next Action of ").rem(r).value());
+            //await next.setText(await plugin.richText.text("Next Action of ").rem(r).value());
+            await updateRemTextWithCreationDebounce(next,await plugin.richText.text("Next Action of ").rem(r).value())
         }
     }
 
@@ -281,7 +324,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     const createRemWithText=async (text:RichTextInterface)=>{
         const newRem=await plugin.rem.createRem() as Rem;
-        await newRem.setText(text);
+        // await newRem.setText(text);
+        await updateRemTextWithCreationDebounce(newRem,text);
         return newRem
     }
     //
@@ -660,18 +704,12 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     //endregion
 
     const prjContainer=await getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project) as Rem;
-    plugin.event.addListener(AppEvents.RemChanged,prjContainer._id,async ()=>{
-
-        for(const prjlike of await prjContainer.getChildrenRem())
-        {
-            if(prjlike.text&&await plugin.richText.length(prjlike.text))
-            {
-                if(!(await prjlike.isTable())&&!(await prjlike.isProperty())){
-                    await tagSubItem(prjlike)
-                }
-            }
-        }
-    })
+    // plugin.event.addListener(AppEvents.RemChanged,prjContainer._id,async ()=>{
+    //     await gtdListenerQueue.then(async ()=>{
+    //
+    //     })
+    //
+    // })
 
 
 
@@ -710,7 +748,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
 
         await stamp.setParent(daily);
-        await stamp.setText(stampRichText);
+        // await stamp.setText(stampRichText);
+        await updateRemTextWithCreationDebounce(stamp,stampRichText);
         await stamp.addPowerup(TIME_TK_PW_CODE.TICK_PW);
         return stamp;
     }
@@ -880,7 +919,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 return OwnerState.UNIQUE
             }
             //when this item belongs to multiple project.
-            else{
+            else if(ownerPropertyAsRems.length>1){
                 for(const owner of ownerPropertyAsRems)
                 {
                     await createReferenceFor(r,owner)
@@ -916,7 +955,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     /**
      * the logic to process rems with "r.Scenario" property. it will
-     * 1. get scenario contained and cached in the host tableview.
+     * 1. get scenario contained and cached in the `SCENARIO` property under the `HOST` tableview.
      * @param r
      * @return a boolean value indicating where the rem "r" has property "r.Scenario"
      */
@@ -930,6 +969,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //if the property value is text without rem references.
         if(!scenarioAsRem||scenarioAsRem.length === 0)
         {
+            //add this scenario to be a potential option of `SCENARIO` property
             const newScenario=await createContainedITEMWithRichText(await r.getTagPropertyValue(sceneHost._id),ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_CONTAINERS.SCENARIO)
             if(!newScenario)
             {
@@ -941,6 +981,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
         else
         //if there are references in the value of property
+        // the referenced rem will become one  Scenario Option
         {
             for(const scene of scenarioAsRem)
             {
@@ -953,13 +994,15 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         return true
 
     }
-    //add listener for Scenario rems
-
-
-    let sceneSet:Set<string>|null=null
+    //add listener for Scenario rems, remove their tag of `SCENARIO` once they are not the children of `SceneHost`
     plugin.event.addListener(AppEvents.RemChanged,sceneHost._id,async ()=>{
-        if(!sceneSet)return
-        sceneSet=new Set<string>((await sceneHost.getDescendants()).map(r=>r._id))
+
+        gtdListenerQueue= gtdListenerQueue.then(async (value)=>{
+
+        })
+
+
+        const sceneSet=new Set<string>((await sceneHost.getDescendants()).map(r=>r._id))
         //Note: a rem is representing a scenario only when it is a descendant of the "sceneHost"
         for(const scene of (await sceneHost.taggedRem()))
         {
@@ -973,6 +1016,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             }
             await scene.removeTag(sceneHost._id)
         }
+
     })
     //endregion
 
@@ -1022,31 +1066,52 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const projectListHandler=async (r:Rem) =>{
         // move item rem into project folder and remove the tag "GTD items"
         // await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project);
-        const q= getContainedWithOwner(r)
+        await getContainedWithOwner(r)
 
         await linkGTDItemToDairy(r)
 
         //the children of a project item should be a GTD item by default(except rems containing properties)
-        plugin.event.addListener(AppEvents.RemChanged,r._id,async ()=>{
-            let itemTagRemoved=true;
-            for(const tag of await r.getTagRems())
-            {
-                if(tag._id===gtdHost._id)itemTagRemoved=false;
-            }
-            if(itemTagRemoved)
-            {
-                plugin.event.removeListener(AppEvents.RemChanged,r._id);
-                return
-            }
+        // plugin.event.removeListener(AppEvents.RemChanged,r._id)
 
-            await q.then(async ()=>{
-                await tagSubItem(r);
-            })
-        })
 
         //remove the tag "GTD items"
         await r.removeTag(gtdHost._id)
+        await r.addTag(prjContainer._id)
     }
+
+    plugin.event.addListener(AppEvents.RemChanged,prjContainer._id,async ()=>{
+        gtdListenerQueue= gtdListenerQueue.then(async ()=>{
+            for(const r of await prjContainer.taggedRem())
+            {
+                let itemTagRemoved=true;
+                for(const tag of await r.getTagRems())
+                {
+                    if(tag._id===gtdHost._id)itemTagRemoved=false;
+                }
+                if(itemTagRemoved&&r.parent!==prjContainer._id)
+                {
+                    plugin.event.removeListener(AppEvents.RemChanged,r._id);
+                }
+                await tagSubItem(r);
+
+            }
+
+            // for(const prjlike of await prjContainer.getChildrenRem())
+            // {
+            //     if(prjlike.text&&await plugin.richText.length(prjlike.text))
+            //     {
+            //         if(!(await prjlike.isTable())&&!(await prjlike.isProperty())){
+            //             await tagSubItem(prjlike)
+            //         }
+            //     }
+            // }
+        })
+
+    })
+
+
+
+
     const refListHandler=async (r:Rem) =>{
         //move the item into the "REFERENCE/Successive Ones" folder
         //await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Reference);
@@ -1095,18 +1160,23 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
     const nowListHandler = async (r:Rem)=>{
         await r.setIsTodo(true);
+        // "NOW" items need not be removed from the tableview for it shall be processed at once.
         await getCollectedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)
         plugin.event.addListener(AppEvents.RemChanged,r._id,async ()=>{
-            if((await r.getTodoStatus())==="Finished")
-            {
-                //remove the tag "GTD items"
-                await r.removeTag(gtdHost._id)
-                //(await getHostRemOf(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW, ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now) as Rem)
-                await dropOutRedundantLink(r,
-                    async (ref)=>ref.parent===(await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)as Rem)._id)
+            gtdListenerQueue= gtdListenerQueue.then(async ()=>{
 
-                plugin.event.removeListener(AppEvents.RemChanged,r._id);
-            }
+                if((await r.getTodoStatus())==="Finished")
+                {
+                    //remove the tag "GTD items"
+                    await r.removeTag(gtdHost._id)
+                    //(await getHostRemOf(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW, ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now) as Rem)
+                    await dropOutRedundantLink(r,
+                        async (ref)=>ref.parent===(await getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)as Rem)._id)
+
+                    plugin.event.removeListener(AppEvents.RemChanged,r._id);
+                }
+            })
+
         })
     }
     //endregion
@@ -1145,7 +1215,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     //let gtdActionQueue=new Set()
     //const gtdActionQueueHead=new Promise<void>(()=>undefined);
-    let gtdActionQueue2:Promise<void>|null=null;
     for(const actSlot of await treat_as_slot?.getChildrenRem())
     {
         const slotHostAsActOption=await getHostRemOf(actSlot)
@@ -1203,9 +1272,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 }
             }
 
-            gtdActionQueue2= gtdActionQueue2 ? gtdActionQueue2.then(handlerCaller):handlerCaller();
+            gtdListenerQueue=gtdListenerQueue.then(handlerCaller);
         }
-        gtdActionQueue2=handlerCaller();
+        await handlerCaller();
         plugin.event.addListener(AppEvents.RemChanged,slotHostAsActOption._id,handlerCaller)
     }
 

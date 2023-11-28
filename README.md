@@ -83,7 +83,8 @@ These options are listed below, with its default name and the action it exerts t
 4.  When an item is "treated_as" a **Project**, it will
     - get collected or linked by its owner IN THE DEFAULT WAY as a subproject(if value of `OWENER_ITEM` exist)
     - a new GTD item named `Next Action of [[r]]`  will be created whose owner is this `Project` item.
-    - all valid direct children of a **Project** will become GTD items. A valid children of **Project** should be neither a Finished Todo nor something like a portal/tableView/property/etc. 
+    - all valid direct children of a **Project** will become GTD items. 
+    - A valid children of **Project** should be a leaf node of the Document Tree and be neither a Finished Todo nor something like a portal/tableView/property/etc. 
 5.  When an item is "treated_as" an item to be done **Later**, it will be collected and linked IN THE DEFAULT WAY *ONLY WHEN* value of `THE_DATE` is specified.
 6.  When an item needs to be done for **Now**
     - the item will be collected or linked IN THE DEFAULT WAY
