@@ -268,12 +268,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         if(await r.isTodo()&&"Finished"===await r.getTodoStatus())
             return;
 
-        // if(await r.getPortalType()===PORTAL_TYPE.PORTAL)
-        //     return;
+        if(await r.getPortalType()===PORTAL_TYPE.PORTAL)
+            return;
 
-
-        //
-        //the checker should work after `r` having gotten contained.
 
 
         let hasGotSubItem=false;
@@ -290,13 +287,17 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
                 //if the child is a rem containing property values, it will not be added as a GTD item by this function
 
+
+                hasGotSubItem=true;
                 const resultArr=await Promise.all(rRefs.map(rr=>rr.isProperty()))
                 let suitForTag=!resultArr.filter(_.identity).length;
 
                 if(suitForTag)
                 {
                     await child.addTag(gtdHost);
-                    hasGotSubItem=true;
+                    // await next.addTag(gtdHost);
+                    await child.setTagPropertyValue(ownerPrjHost._id,await plugin.richText.rem(r).value())
+
                 }
             }
         }
@@ -305,10 +306,19 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //fixed: this thought is wrong for the creation of ref `next` will trigger the listener of `r`—— debounce filter has been added in `createReferenceFor`
         if(!hasGotSubItem)
         {
-            //fixme : Duplicate creation error triggered here "from argument `prjLike`"
+            //fixed : Duplicate creation error triggered here "from argument `prjLike`"
             const next=await createReferenceFor(r,r);
             //await next.setText(await plugin.richText.text("Next Action of ").rem(r).value());
-            await updateRemTextWithCreationDebounce(next,await plugin.richText.text("Next Action of ").rem(r).value())
+            await updateRemTextWithCreationDebounce(next,await plugin.richText.text("Next Action ").value())
+            await next.setTagPropertyValue(ownerPrjHost._id,await plugin.richText.rem(r).value())
+
+            // const nextCallback=async ()=>{
+            //     plugin.event.removeListener(AppEvents.RemChanged,next._id,nextCallback);
+            //     const newNext=await createReferenceFor(r,r);
+            //     await updateRemTextWithCreationDebounce(next,await plugin.richText.text("Next Action ").value())
+            //
+            // }
+            // plugin.event.addListener(AppEvents.RemChanged,next._id,nextCallback)
         }
     }
 
@@ -340,7 +350,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         {
            for(const por of await r.portalsAndDocumentsIn())
            {
-               if(por.parent===uniqUnder._id)
+               if(por._id!==r._id&&por.parent===uniqUnder._id&&await por.getPortalType()===PORTAL_TYPE.PORTAL)
                    return por;
            }
         }
@@ -348,7 +358,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         const portal=await plugin.rem.createPortal();
         if(!portal)return;
         await r.addToPortal(portal);
-        if(uniqUnder)await r.setParent(uniqUnder)
+        if(uniqUnder)await portal.setParent(uniqUnder)
         return portal;
     }
     /**
@@ -581,7 +591,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         if(flag)
         {
             const remRef= await createReferenceFor(gtdContainerInterface,sidebar);
-            await remRef.setBackText(await plugin.richText.text("this rem cannot be removed or the container will be duplicated in the sidebar").value())
+            await remRef.setBackText(await plugin.richText.text("this rem cannot be removed or the container will be duplicated in the sidebar. If you don't wanna this container interface shown in sidebar, just delete the portal with leaving this reference here.").value())
             await remRef.setPracticeDirection("none");
             await remRef.setEnablePractice(false);
             // todo :maybe the plugin did not  pass the marketplace check due to operating the sidebar is a premium feature?
@@ -704,12 +714,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     //endregion
 
     const prjContainer=await getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project) as Rem;
-    // plugin.event.addListener(AppEvents.RemChanged,prjContainer._id,async ()=>{
-    //     await gtdListenerQueue.then(async ()=>{
-    //
-    //     })
-    //
-    // })
 
 
 
@@ -809,8 +813,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             // copy the Priority (timeline type) from the item's property to the time tick's one.
             if(stamp)
             {
-                link || await createPortalFor(r,stamp);
-                // await link.setParent(stamp);
+                link=link || await createPortalFor(r,stamp);
+                await link?.setParent(stamp);
 
 
                 // Time ticks add in the previous step need to be tagged with PW "TimeTick" and assign the property "TickType"
@@ -999,23 +1003,23 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         gtdListenerQueue= gtdListenerQueue.then(async (value)=>{
 
+            const sceneSet=new Set<string>((await sceneHost.getDescendants()).map(r=>r._id))
+            //Note: a rem is representing a scenario only when it is a descendant of the "sceneHost"
+            for(const scene of (await sceneHost.taggedRem()))
+            {
+
+                if(scene.parent===sceneHost._id){
+                    //DONE maybe this `scene` is actually type of scenes in future version?
+                    // answer: a scene classifier is not a scene but a rem whose parent is "sceneHost" and that is not tagged by "sceneHost".
+                }
+                if ( sceneSet.has(scene._id) ){
+                    continue
+                }
+                await scene.removeTag(sceneHost._id)
+            }
         })
 
 
-        const sceneSet=new Set<string>((await sceneHost.getDescendants()).map(r=>r._id))
-        //Note: a rem is representing a scenario only when it is a descendant of the "sceneHost"
-        for(const scene of (await sceneHost.taggedRem()))
-        {
-
-            if(scene.parent===sceneHost._id){
-                //DONE maybe this `scene` is actually type of scenes in future version?
-                // answer: a scene classifier is not a scene but a rem whose parent is "sceneHost" and that is not tagged by "sceneHost".
-            }
-            if ( sceneSet.has(scene._id) ){
-                continue
-            }
-            await scene.removeTag(sceneHost._id)
-        }
 
     })
     //endregion
@@ -1038,8 +1042,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //move r into WAIT list
             await getContainedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Later)
             //create reference of "r" in Daily Doc
-            let rRef=await createReferenceFor(r)
-            await linkGTDItemToDairy(r,rRef)
+            await linkGTDItemToDairy(r)
             //remove the tag "GTD items"
             await r.removeTag(gtdHost._id)
         }

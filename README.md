@@ -11,6 +11,7 @@ This chapter supposes you have know the workflow of GTD.
 - If you don't, there are lots of tutorials in YouTube or BiliBili.
 
 After Setting up the plugin, a rem named `GTD Container Panel` is shown in the sidebar.
+If you `Customize your sidebar` you can find there is also a reference to `GTD `
 
 ![](https://github.com/00x0101101/GTD_On_RN/blob/main/public/toturials/Quicker_20231108_160425.png?raw=true)
 
