@@ -805,7 +805,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //2. if the "TimeTick" property of "r" is plain text, a new stamp tagged with "Time Tick" powerUp will be created, whose content will be the plain text
             //3. if the "TimeTick" property of "r" is a reference to another rem, "stamp" will be that rem.
             let stamp= await plugin.richText.length(tick) ?
-                (tickRemL.length===0 ? await setupStampWithRichText(dateRem,tick): await plugin.rem.findOne(tickRemL[0]))
+                (tickRemL.length===0 ? await setupStampWithRichText(dateRem,tick): await plugin.rem.findByName(await plugin.richText.text(tickRemL[0]).value(),dateRem._id))
                 : dateRem;
 
             if(stamp?._id!==dateRem._id)await stamp?.setParent(dateRem)
@@ -1243,9 +1243,10 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //then processing ALL the GTD items tagged with the "GTD Host"
         //so there may be "concurrent" conflicts between these handlers, which will duplicate the edits to Rems.
         //"handlerCaller" wraps the handlers to filter the duplicate edit
+        let callerTriggered=false;
         const handlerCaller=async ()=>{
-
-
+            if(callerTriggered)return
+            callerTriggered=true;
             if(slotHostAsActOption._id!==(await getHostRemOf(actSlot))._id)
             {
                 plugin.event.removeListener(AppEvents.RemChanged,slotHostAsActOption._id)
@@ -1276,6 +1277,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             }
 
             gtdListenerQueue=gtdListenerQueue.then(handlerCaller);
+            callerTriggered=false;
         }
         await handlerCaller();
         plugin.event.addListener(AppEvents.RemChanged,slotHostAsActOption._id,handlerCaller)
