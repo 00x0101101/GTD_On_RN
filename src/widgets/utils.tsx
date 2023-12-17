@@ -1,6 +1,6 @@
 import { filterAsync, PORTAL_TYPE, ReactRNPlugin, Rem, RichTextInterface } from '@remnote/plugin-sdk';
 import _, { gt } from 'lodash';
-import { GTD_HOST_PW, GTD_LOGGER_PW_CODE } from './consts';
+import { ACT_OPTIONS_LOGGER_PW_CODE, GTD_HOST_PW, GTD_LOGGER_PW_CODE } from './consts';
 
 
 const debounceMap=new Map<string,number>();
@@ -30,7 +30,7 @@ export class Utils{
     private plugin: ReactRNPlugin;
     private gtdHost: Rem;
     private ownerPrjHost: Rem;
-    private getHostRemOf: (pw: Rem) => Promise<Rem>;
+    getHostRemOf: (pw: Rem) => Promise<Rem>;
     constructor(plugin: ReactRNPlugin,gtdHost:Rem,ownerPrjHost:Rem) {
         this.plugin = plugin;
         this.gtdHost=gtdHost;
@@ -264,6 +264,54 @@ export class Utils{
     }
 
 
+    //region Functions for GTD panel with containers in sidebar
+
+    /**
+     * move GTD item "r" into one container rem in the Container Panel
+     *
+     * (collect, contain and complete the GTD items to become the conqueror of our daily issue \^_\^ )
+     * @param r GTD items to contain, if left void, the container will be returned without any
+     * @param containerCode the code specifying the container rem
+     * @param indirectMoveByPortal  if set to be true, `r` will get collected by leaving a portal under its owner instead of being moved to that one directly
+     */
+    public async getCollected(r:Rem|undefined,containerCode:string,indirectMoveByPortal:boolean=false){
+        let containerPW
+        try {
+            containerPW=(await this.plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,containerCode));
+        }
+        catch (e) {
+            containerPW=await this.plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE,containerCode)
+        }
+        if(!containerPW)return
+        const container=await getHostRemOf(containerPW)
+        container &&r  && ( indirectMoveByPortal? (await this.createPortalForItem(r,container)) : r.parent!==container._id &&  await r.setParent(container));
+        return container
+    }
+
+
+    //endregion
+
+
+
+
+
+    /**
+     * create a rem with specific content as a GTD item rem
+     * @param text the content of the rem to create
+     * @param itemType which type is this item? a rem representing a project or a scenario?
+     * @return the created rem. But if text is blank, undefined will be returned
+     */
+    public async createContainedITEMWithRichText(text: RichTextInterface, itemType: string = ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project){
+        if(text.length===0)return
+        const newRem=await this.createRemWithText(text)
+        await this.getCollected(newRem,itemType)
+        return newRem
+        //todo: it is the work of next stage to introduce the "Natural Planning Model" functionality to the action tag "Project"
+        // "Natural Planning Model" is a miniature of Project Management( WBS/schedule with DAG topological sort/resource regulation/... )
+        /*const prjActionHost=await getHostRemOf((await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS.Project)) as Rem);
+          await newRem.addTag(prjActionHost._id);
+        * */
+    }
 
 }
 

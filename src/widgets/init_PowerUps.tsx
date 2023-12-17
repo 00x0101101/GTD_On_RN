@@ -2,7 +2,6 @@ import {
     AppEvents,
     BuiltInPowerupCodes,
     filterAsync,
-    PORTAL_TYPE,
     PropertyLocation,
     PropertyType,
     ReactRNPlugin,
@@ -53,178 +52,6 @@ let  gtdListenerQueue=new Promise<void>((resolve, reject)=>{resolve()})
 
 export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
-    const utils=await getUtils(plugin);
-
-
-    //region Functions to deploy templates from powerUps to hosts
-
-    /**
-     * function to check whether the powerUp has only one host
-     * @param pw the powerUp to check
-     * @return a enum value to indicate the uniqueness state of the host which "pw" owns
-     */
-    const hostUniqueCheck=async (pw:Rem)=>{
-        //const pw=await plugin.powerup.getPowerupByCode(pwCode)
-        if(!pw)return HostCheckResult.INVALID_4_SRC_NOT_EXIST;
-        let hostList=await pw.taggedRem()
-        if(hostList&&hostList.length<=0)return HostCheckResult.NOT_EXIST
-        if(hostList.length>1)return HostCheckResult.NOT_UNIQUE
-        if(hostList.length===1)return HostCheckResult.UNIQUE
-    }
-
-    /**
-     * a wrap on "genHostPropertiesWithLog" to reassure each of the hosts is unique for their powerUp.
-     * if host does not exist, a new rem will be created for the powerUp as a host and tagged by the powerUp.
-     * @param pwCode powerUp code for the root Host
-     * @param loggerCode the code of the powerUp to deploy its template onto the root Host
-     */
-    const hostUniqueRectify=async (pwCode:string,loggerCode:string)=>{
-        const pw=await plugin.powerup.getPowerupByCode(pwCode);
-        if(!pw)return
-        let host
-        const checkCode=await hostUniqueCheck(pw)
-        switch (checkCode) {
-            case HostCheckResult.INVALID_4_SRC_NOT_EXIST: return;
-            case HostCheckResult.UNIQUE:
-                // host=(await pw.taggedRem())[0]
-                host=await getHostRemOf(pw);
-                await genHostPropertiesWithLog(host,loggerCode)
-                break;
-            case HostCheckResult.NOT_EXIST:
-                host=await plugin.rem.createRem()
-                if(!host)return
-                await host.setText(["Host"])
-                await genHostPropertiesWithLog(host,loggerCode)
-                await host.addPowerup(pwCode)
-                break;
-            case HostCheckResult.NOT_UNIQUE:
-
-                // leave the oldest host and dismiss the other hosts
-                let hostList=await pw.taggedRem()
-                if(!hostList||!hostList.length)return;
-                let earliestRem=hostList[0]
-                for(let h of hostList)
-                {
-                    if(earliestRem.createdAt>h.createdAt)
-                        earliestRem=h
-                }
-                for(let host of hostList)
-                {
-                    if(earliestRem._id!==host._id){}
-                        await host.removePowerup(pwCode)
-                }
-                await genHostPropertiesWithLog(earliestRem,loggerCode)
-                break;
-        }
-    }
-
-    /**
-     * Apply the properties or container from the template in pwCode & slotCode to one host
-     * @param host the rem to apply
-     * @param pwCode the code of powerUp as the template of hosts
-     * @param slotCode the PW slot code or option Rem as the tagger of the properties of the host
-     * @param options the type of the slots in template—— if options is `HostType.CONTAINER` this function will duplicate the `host` as a container.
-     */
-    const supplyHostPropertyVal=async (host:Rem,pwCode:string,slotCode:string|Rem,options:HostType)=>{
-
-        const slot=(typeof slotCode==="string") ? await plugin.powerup.getPowerupSlotByCode(pwCode,slotCode): slotCode
-
-        if(!slot)
-        {
-            await plugin.app.toast("slot not found...")
-            return
-        }
-        //region to reassure the uniqueness of tagged rem of `slot` for it should tag its unique property which is under the host.
-
-        const hostProps=await slot.taggedRem()
-        // const slotEnums=await slot.children
-        // const norm=1+(slotEnums?.length||0)
-        const norm=1
-        if(hostProps&&hostProps.length===norm)
-            return;
-        if(hostProps.length>norm)
-            for(let ba of hostProps)
-            {
-                if(ba.parent!==slot._id)
-                    await ba.removeTag(slot._id)
-            }
-
-        //endregion
-        const property = await plugin.rem.createRem();
-        if(options===HostType.CONTAINER)
-        {
-            property && gtdContainerInterface && await property.setParent(gtdContainerInterface)
-
-        }
-        else{
-            await property?.setParent(host);
-
-        }
-
-        await property?.addTag(slot)
-        slot.text &&   await utils.updateRemTextWithCreationDebounce(property,slot.text)  // await property?.setText(slot.text);
-        await property?.setIsProperty(options===HostType.PROPERTY);
-        return property;
-    }
-
-    /**
-     * apply the properties/options from the PowerUp template to the host PowerUp has tagged, in batch.
-     * @param host
-     * @param loggerLike rem to provide template to the host, can be PowerUp itself or properties of powerUp
-     * @param hType the type of template slot:  Options ? Properties? Container taggers?
-     * @param optSet a object used to figure out rems to be filtered out, which are under "loggerLike" and should not be template slots (e.g. "QueryTable")
-     */
-    const genHostPropertiesWithLog =async (host:Rem, loggerLike:string|Rem, hType=HostType.PROPERTY, optSet:any=undefined) => {
-        if(hType===HostType.PROPERTY)
-        {
-            if(typeof loggerLike!=="string")return
-            const logger=await plugin.powerup.getPowerupByCode(loggerLike);
-            const slotCodesObj=PW2SLOTS.get(loggerLike)
-            const slotCodesArr=slotCodesObj && Object.entries(slotCodesObj)
-            if(!(logger&&slotCodesArr))return
-            for(let slotCode of slotCodesArr)
-            {
-                await supplyHostPropertyVal(host,loggerLike,slotCode[1],hType)
-            }
-        }
-        else if(hType===HostType.OPTIONS)
-        {
-            if(typeof loggerLike==="string"||!optSet)return
-
-            let slotLikes=await loggerLike.getChildrenRem()
-            // load the options of slots (if exists)
-            for(const opt of slotLikes)
-            {
-
-                if(opt.text)
-                {
-                    const text=await plugin.richText.toString(opt.text)
-                    if((text in optSet))
-                    {
-                        await supplyHostPropertyVal(host,"",opt,HostType.OPTIONS)
-
-                    }
-                }
-            }
-        }
-    }
-
-    //endregion
-
-
-    const getHostRemOf=async (pw:Rem)=>{
-        return (await pw.taggedRem())[0]
-    }
-    const getAllPropOf=async (tagRem:Rem|undefined)=>{
-        let children= await tagRem?.getChildrenRem()
-        return children && await filterAsync(children,c=>c.isProperty())
-    }
-
-
-
-
-
-
 
     //region Init PowerUps
 
@@ -256,19 +83,19 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     ];
     await plugin.app.registerPowerup('GTD Engine', GTD_LOGGER_PW_CODE.LOGGER_PW,
         "A PowerUp marking up the properties under the host of the PowerUp tag 'GTD Engine Host' ", {
-        slots: gtdSlots.map(slot => {
-            return  {
-                code: slot[0],
-                name: slot[1],
-                hidden: true,
-                onlyProgrammaticModifying: true,
-                propertyType: slot[3],
-                propertyLocation:slot[2],
-                selectSourceType:slot[4],
-                enumValues:slot[5] // Record<string as Aila,string as Rem Content>
-            }
-        }),
-    });
+            slots: gtdSlots.map(slot => {
+                return  {
+                    code: slot[0],
+                    name: slot[1],
+                    hidden: true,
+                    onlyProgrammaticModifying: true,
+                    propertyType: slot[3],
+                    propertyLocation:slot[2],
+                    selectSourceType:slot[4],
+                    enumValues:slot[5] // Record<string as Aila,string as Rem Content>
+                }
+            }),
+        });
     //endregion
 
 
@@ -302,8 +129,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     // a rem to show all the container rems of GTD engine
     await plugin.app.registerPowerup("GTD Containers Panel",ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE,
         "a rem to show all the container rems of GTD engine" ,{slots:Object.entries(ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_CONTAINERS).map((r)=>{
-            /*const aspect=r[0] as keyof aspect_containers*/
-            return {
+                /*const aspect=r[0] as keyof aspect_containers*/
+                return {
                     code:r[1],
                     name:r[0],
                     hidden: true,
@@ -353,6 +180,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const ownerPrjPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_ITEM) as Rem
     const scenePW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.SCENARIO) as Rem
 
+
+    var utils=await getUtils(plugin);
+
     //region Init container Interface(GTD Panel in sidebar)
     const gtdContainerInterface=await plugin.powerup.getPowerupByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE)
     if( gtdContainerInterface)
@@ -395,17 +225,17 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     const treat_as_slot=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TREAT_AS)
     //the host representing "TREAT_AS" property
-    const act_slot_host=treat_as_slot&& await getHostRemOf(treat_as_slot)
+    const act_slot_host=treat_as_slot&& await utils.getHostRemOf(treat_as_slot)
     if(!(treat_as_slot&&act_slot_host))return
 
 
 
-    const timeLineTypeHost=await getHostRemOf(tlkPW);
-    const gtdHost=await getHostRemOf(gtd_host_pw);
-    const dateHost=await getHostRemOf(date_host_pw);
-    const tickHost=await getHostRemOf(tick_host_pw);
-    const ownerPrjHost=await getHostRemOf(ownerPrjPW);
-    const sceneHost=await getHostRemOf(scenePW);
+    const timeLineTypeHost=await utils.getHostRemOf(tlkPW);
+    const gtdHost=await utils.getHostRemOf(gtd_host_pw);
+    const dateHost=await utils.getHostRemOf(date_host_pw);
+    const tickHost=await utils.getHostRemOf(tick_host_pw);
+    const ownerPrjHost=await utils.getHostRemOf(ownerPrjPW);
+    const sceneHost=await utils.getHostRemOf(scenePW);
     await sceneHost.setIsDocument(true);
 
 
@@ -465,34 +295,170 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     //endregion
 
-    //region Functions for GTD panel with containers in sidebar
+
+
+
+    //region Functions to deploy templates from powerUps to hosts
 
     /**
-     * move GTD item "r" into one container rem in the Container Panel
-     *
-     * (collect, contain and complete the GTD items to become the conqueror of our daily issue \^_\^ )
-     * @param r GTD items to contain, if left void, the container will be returned without any
-     * @param containerCode the code specifying the container rem
-     * @param indirectMoveByPortal  if set to be true, `r` will get collected by leaving a portal under its owner instead of being moved to that one directly
+     * function to check whether the powerUp has only one host
+     * @param pw the powerUp to check
+     * @return a enum value to indicate the uniqueness state of the host which "pw" owns
      */
-    const getCollected = async (r:Rem|undefined,containerCode:string,indirectMoveByPortal:boolean=false) => {
-        let containerPW
-        try {
-            containerPW=(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,containerCode));
-        }
-        catch (e) {
-            containerPW=await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_INTERFACE,containerCode)
-        }
-        if(!containerPW)return
-        const container=await getHostRemOf(containerPW)
-        container &&r  && ( indirectMoveByPortal? (await utils.createPortalForItem(r,container)) : r.parent!==container._id &&  await r.setParent(container));
-        return container
+    async function hostUniqueCheck(pw:Rem){
+        //const pw=await plugin.powerup.getPowerupByCode(pwCode)
+        if(!pw)return HostCheckResult.INVALID_4_SRC_NOT_EXIST;
+        let hostList=await pw.taggedRem()
+        if(hostList&&hostList.length<=0)return HostCheckResult.NOT_EXIST
+        if(hostList.length>1)return HostCheckResult.NOT_UNIQUE
+        if(hostList.length===1)return HostCheckResult.UNIQUE
     }
 
+    /**
+     * a wrap on "genHostPropertiesWithLog" to reassure each of the hosts is unique for their powerUp.
+     * if host does not exist, a new rem will be created for the powerUp as a host and tagged by the powerUp.
+     * @param pwCode powerUp code for the root Host
+     * @param loggerCode the code of the powerUp to deploy its template onto the root Host
+     */
+    async function hostUniqueRectify(pwCode:string,loggerCode:string){
+        const pw=await plugin.powerup.getPowerupByCode(pwCode);
+        if(!pw)return
+        let host
+        const checkCode=await hostUniqueCheck(pw)
+        switch (checkCode) {
+            case HostCheckResult.INVALID_4_SRC_NOT_EXIST: return;
+            case HostCheckResult.UNIQUE:
+                // host=(await pw.taggedRem())[0]
+                host=await utils.getHostRemOf(pw);
+                await genHostPropertiesWithLog(host,loggerCode)
+                break;
+            case HostCheckResult.NOT_EXIST:
+                host=await plugin.rem.createRem()
+                if(!host)return
+                await host.setText(["Host"])
+                await genHostPropertiesWithLog(host,loggerCode)
+                await host.addPowerup(pwCode)
+                break;
+            case HostCheckResult.NOT_UNIQUE:
+
+                // leave the oldest host and dismiss the other hosts
+                let hostList=await pw.taggedRem()
+                if(!hostList||!hostList.length)return;
+                let earliestRem=hostList[0]
+                for(let h of hostList)
+                {
+                    if(earliestRem.createdAt>h.createdAt)
+                        earliestRem=h
+                }
+                for(let host of hostList)
+                {
+                    if(earliestRem._id!==host._id){}
+                        await host.removePowerup(pwCode)
+                }
+                await genHostPropertiesWithLog(earliestRem,loggerCode)
+                break;
+        }
+    }
+
+    /**
+     * Apply the properties or container from the template in pwCode & slotCode to one host
+     * @param host the rem to apply
+     * @param pwCode the code of powerUp as the template of hosts
+     * @param slotCode the PW slot code or option Rem as the tagger of the properties of the host
+     * @param options the type of the slots in template—— if options is `HostType.CONTAINER` this function will duplicate the `host` as a container.
+     */
+    async function supplyHostPropertyVal(host:Rem,pwCode:string,slotCode:string|Rem,options:HostType){
+
+        const slot=(typeof slotCode==="string") ? await plugin.powerup.getPowerupSlotByCode(pwCode,slotCode): slotCode
+
+        if(!slot)
+        {
+            await plugin.app.toast("slot not found...")
+            return
+        }
+        //region to reassure the uniqueness of tagged rem of `slot` for it should tag its unique property which is under the host.
+
+        const hostProps=await slot.taggedRem()
+        // const slotEnums=await slot.children
+        // const norm=1+(slotEnums?.length||0)
+        const norm=1
+        if(hostProps&&hostProps.length===norm)
+            return;
+        if(hostProps.length>norm)
+            for(let ba of hostProps)
+            {
+                if(ba.parent!==slot._id)
+                    await ba.removeTag(slot._id)
+            }
+
+        //endregion
+        const property = await plugin.rem.createRem();
+        if(options===HostType.CONTAINER)
+        {
+            property && gtdContainerInterface && await property.setParent(gtdContainerInterface)
+
+        }
+        else{
+            await property?.setParent(host);
+
+        }
+
+        await property?.addTag(slot)
+        slot.text &&   await utils.updateRemTextWithCreationDebounce(property,slot.text)  // await property?.setText(slot.text);
+        await property?.setIsProperty(options===HostType.PROPERTY);
+        return property;
+    }
+
+    /**
+     * apply the properties/options from the PowerUp template to the host PowerUp has tagged, in batch.
+     * @param host
+     * @param loggerLike rem to provide template to the host, can be PowerUp itself or properties of powerUp
+     * @param hType the type of template slot:  Options ? Properties? Container taggers?
+     * @param optSet a object used to figure out rems to be filtered out, which are under "loggerLike" and should not be template slots (e.g. "QueryTable")
+     */
+    async function genHostPropertiesWithLog(host:Rem, loggerLike:string|Rem, hType=HostType.PROPERTY, optSet:any=undefined){
+        if(hType===HostType.PROPERTY)
+        {
+            if(typeof loggerLike!=="string")return
+            const logger=await plugin.powerup.getPowerupByCode(loggerLike);
+            const slotCodesObj=PW2SLOTS.get(loggerLike)
+            const slotCodesArr=slotCodesObj && Object.entries(slotCodesObj)
+            if(!(logger&&slotCodesArr))return
+            for(let slotCode of slotCodesArr)
+            {
+                await supplyHostPropertyVal(host,loggerLike,slotCode[1],hType)
+            }
+        }
+        else if(hType===HostType.OPTIONS)
+        {
+            if(typeof loggerLike==="string"||!optSet)return
+
+            let slotLikes=await loggerLike.getChildrenRem()
+            // load the options of slots (if exists)
+            for(const opt of slotLikes)
+            {
+
+                if(opt.text)
+                {
+                    const text=await plugin.richText.toString(opt.text)
+                    if((text in optSet))
+                    {
+                        await supplyHostPropertyVal(host,"",opt,HostType.OPTIONS)
+
+                    }
+                }
+            }
+        }
+    }
 
     //endregion
 
-    const prjContainer=await getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project) as Rem;
+
+
+
+
+
+    const prjContainer=await utils.getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project) as Rem;
 
 
 
@@ -632,23 +598,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     //region Functions and variables to handle the "Owner Project" property
 
-    /**
-     * create a rem with specific content as a GTD item rem
-     * @param text the content of the rem to create
-     * @param itemType which type is this item? a rem representing a project or a scenario?
-     * @return the created rem. But if text is blank, undefined will be returned
-     */
-    const createContainedITEMWithRichText =async (text: RichTextInterface, itemType: string = ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project) => {
-        if(text.length===0)return
-        const newRem=await utils.createRemWithText(text)
-        await getCollected(newRem,itemType)
-        return newRem
-        //todo: it is the work of next stage to introduce the "Natural Planning Model" functionality to the action tag "Project"
-        // "Natural Planning Model" is a miniature of Project Management( WBS/schedule with DAG topological sort/resource regulation/... )
-        /*const prjActionHost=await getHostRemOf((await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS.Project)) as Rem);
-          await newRem.addTag(prjActionHost._id);
-        * */
-    }
+
 
     /**
      * The **supplement of**  "getCollected" logic for rem with "Owner Project" property ( and mainly for rem with "treat as project" action)
@@ -681,7 +631,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //Q: has other rems used the "tag channel"?
             //A: "not yet" can be asserted after checking the code.
 
-            const newItem= await createContainedITEMWithRichText(await r.getTagPropertyValue(ownerPrjHost._id))
+            const newItem= await utils.createContainedITEMWithRichText(await r.getTagPropertyValue(ownerPrjHost._id))
             if(!newItem)
             {
                 return OwnerState.INVALID_4_SRC_NOT_EXIST
@@ -698,7 +648,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             {
                 const owner=ownerPropertyAsRems[0]
                 await r.setParent(owner)
-                await utils.createReferenceFor(r,await getCollected(undefined,actionCode))
+                await utils.createReferenceFor(r,await utils.getCollected(undefined,actionCode))
                 return OwnerState.UNIQUE
             }
             //when this item belongs to multiple project.
@@ -728,7 +678,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         const state=await getCollectedWithOwner(r,actionCode)
         if(state===OwnerState.INVALID_4_SRC_NOT_EXIST||state===OwnerState.NOT_UNIQUE)
         {
-            (await getCollected(r, actionCode, OwnerState.INVALID_4_SRC_NOT_EXIST===state&&r.parent!==gtdHost._id))
+            (await utils.getCollected(r, actionCode, OwnerState.INVALID_4_SRC_NOT_EXIST===state&&r.parent!==gtdHost._id))
         }
     }
 
@@ -753,7 +703,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         if(!scenarioAsRem||scenarioAsRem.length === 0)
         {
             //add this scenario to be a potential option of `SCENARIO` property
-            const newScenario=await createContainedITEMWithRichText(await r.getTagPropertyValue(sceneHost._id),ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_CONTAINERS.SCENARIO)
+            const newScenario=await utils.createContainedITEMWithRichText(await r.getTagPropertyValue(sceneHost._id),ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_CONTAINERS.SCENARIO)
             if(!newScenario)
             {
                 // await getCollected(r,actionCode);
@@ -909,7 +859,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         await r.removeTag(gtdHost._id)
     }
     const wasteListHandler = async (r:Rem) =>{
-        await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.WasteBin);
+        await utils.getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.WasteBin);
         //portal the item into Daily Doc
         await linkGTDItemToDairy(r);
 
@@ -951,9 +901,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 {
                     //remove the tag "GTD items"
                     await r.removeTag(gtdHost._id)
-                    //(await getHostRemOf(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW, ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now) as Rem)
+                    //(await utils.getHostRemOf(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW, ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now) as Rem)
                     await utils.dropOutRedundantLink(r,
-                        async (ref)=>ref.parent===(await getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)as Rem)._id)
+                        async (ref)=>ref.parent===(await utils.getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)as Rem)._id)
 
                     plugin.event.removeListener(AppEvents.RemChanged,r._id);
                 }
@@ -999,7 +949,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     //const gtdActionQueueHead=new Promise<void>(()=>undefined);
     for(const actSlot of await treat_as_slot?.getChildrenRem())
     {
-        const slotHostAsActOption=await getHostRemOf(actSlot)
+        const slotHostAsActOption=await utils.getHostRemOf(actSlot)
         if(!slotHostAsActOption)
         {
             //const slotText=actSlot.text && await plugin.richText.toString(actSlot.text)
@@ -1026,7 +976,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         const handlerCaller=async ()=>{
             if(callerTriggered)return
             callerTriggered=true;
-            if(slotHostAsActOption._id!==(await getHostRemOf(actSlot))._id)
+            if(slotHostAsActOption._id!==(await utils.getHostRemOf(actSlot))._id)
             {
                 plugin.event.removeListener(AppEvents.RemChanged,slotHostAsActOption._id)
                 return
