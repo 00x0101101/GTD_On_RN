@@ -23,19 +23,37 @@ export const getUtils=async (plugin:ReactRNPlugin)=>{
     const gtdHost = await getHostRemOf(gtd_host_pw);
     const ownerPrjPW =await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW, GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_ITEM) as Rem
     const ownerPrjHost = await getHostRemOf(ownerPrjPW);
-    return new Utils(plugin,gtdHost,ownerPrjHost)
+    const date_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.THE_DATE) as Rem
+    const tick_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIME_TICK) as Rem
+    const tlkPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE) as Rem
+    const scenePW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.SCENARIO) as Rem
+    const dateHost=await getHostRemOf(date_host_pw);
+    const tickHost=await getHostRemOf(tick_host_pw);
+    const sceneHost=await getHostRemOf(scenePW);
+    const timeLineTypeHost=await getHostRemOf(tlkPW);
+    const hosts=[gtdHost,ownerPrjHost,dateHost,tickHost,sceneHost,timeLineTypeHost]
+
+    return new Utils(plugin,hosts)
 }
 
 
 export class Utils{
     private plugin: ReactRNPlugin;
-    private gtdHost: Rem;
-    private ownerPrjHost: Rem;
-    getHostRemOf: (pw: Rem) => Promise<Rem>;
-    constructor(plugin: ReactRNPlugin,gtdHost:Rem,ownerPrjHost:Rem) {
+    readonly gtdHost: Rem;
+    readonly ownerPrjHost: Rem;
+    readonly getHostRemOf: (pw: Rem) => Promise<Rem>;
+    readonly dateHost: Rem;
+    readonly tickHost: Rem;
+    readonly sceneHost: Rem;
+    readonly timeLineTypeHost: Rem;
+    constructor(plugin: ReactRNPlugin,hosts: Rem[]) {
         this.plugin = plugin;
-        this.gtdHost=gtdHost;
-        this.ownerPrjHost=ownerPrjHost;
+        this.gtdHost=hosts[0];
+        this.ownerPrjHost=hosts[1];
+        this.dateHost=hosts[2];
+        this.tickHost=hosts[3];
+        this.sceneHost=hosts[4];
+        this.timeLineTypeHost=hosts[5];
         this.getHostRemOf=getHostRemOf;
     }
 

@@ -22,6 +22,7 @@ import {
 import moment from 'moment';
 import _ from 'lodash';
 import { getUtils } from './utils';
+import { GTDItem } from './GTDItem';
 
 // export let utils:{[key:string]:(...args: any[])=> any }
 
@@ -735,8 +736,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     //region Definitions of event listener handler implementing "Treat as" actions.
 
-    const waitListHandler=async (r:Rem)=>{
-        let dateDocL=await getDateRemIdWithProperty(r)
+    const waitListHandler=async (r:GTDItem)=>{
+        let dateDocL=await r.getDateRemIdWithProperty()
 
         // if specific time tick was not designated, place items into references of "Today" PowerUp at that DailyDoc
         // (Or left them in the DailyDoc directly?)
@@ -745,46 +746,46 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         {
 
             //move r into WAIT list
-            await getContainedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Later)
+            await r.getContainedWithOwner(ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Later)
             //create reference of "r" in Daily Doc
-            await linkGTDItemToDairy(r)
+            await r.linkGTDItemToDairy()
             //remove the tag "GTD items"
-            await r.removeTag(gtdHost._id)
+            await r.rem.removeTag(gtdHost._id)
         }
         else
         {
             await plugin.app.toast("A date as a tip needed if you want make it LATER to do")
         }
     }
-    const awaitListHandler=async (r:Rem) =>{
-        await getContainedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Delegate)
+    const awaitListHandler=async (r:GTDItem) =>{
+        await r.getContainedWithOwner(ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Delegate)
 
         //DONE if "scenario" does not exist, a toast is needed to inform the user.
-        if(!await getContainedWithScenario(r))
+        if(!await r.getContainedWithScenario())
         {
             await plugin.app.toast("Assignee(s) need to be specified in SCENARIO when you wanna delegate it to someone")
         }
         // XXX : I cannot come up with a better idea in such a haste
         //portal the item into Daily Doc
-        await linkGTDItemToDairy(r)
+        await r.linkGTDItemToDairy()
         //remove the tag "GTD items"
-        await r.removeTag(gtdHost._id)
+        await r.rem.removeTag(gtdHost._id)
 
     }
-    const projectListHandler=async (r:Rem) =>{
+    const projectListHandler=async (r:GTDItem) =>{
         // move item rem into project folder and remove the tag "GTD items"
         // await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project);
-        await getContainedWithOwner(r)
+        await r.getContainedWithOwner()
 
-        await linkGTDItemToDairy(r)
+        await r.linkGTDItemToDairy()
 
         //the children of a project item should be a GTD item by default(except rems containing properties)
         // plugin.event.removeListener(AppEvents.RemChanged,r._id)
 
 
         //remove the tag "GTD items"
-        await r.removeTag(gtdHost._id)
-        await r.addTag(prjContainer._id)
+        await r.rem.removeTag(gtdHost._id)
+        await r.rem.addTag(prjContainer._id)
     }
 
     plugin.event.addListener(AppEvents.RemChanged,prjContainer._id,async ()=>{
@@ -820,40 +821,40 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
 
 
-    const refListHandler=async (r:Rem) =>{
+    const refListHandler=async (r:GTDItem) =>{
         //move the item into the "REFERENCE/Successive Ones" folder
         //await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Reference);
         //DONE (IMPORTANT) : what about the logic when "r" has property "r.OwnerProject"?
         //todo how to get items contained when the items has other property?
         // (partially done:SCENARIO/DATE/OWNER have their containing logic)
-        await getContainedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Reference)
+        await r.getContainedWithOwner(ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Reference)
 
 
 
 
         //remove the tag "GTD items"
-        await r.removeTag(gtdHost._id)
+        await r.rem.removeTag(gtdHost._id)
     }
-    const wasteListHandler = async (r:Rem) =>{
-        await utils.getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.WasteBin);
+    const wasteListHandler = async (r:GTDItem) =>{
+        await utils.getCollected(r.rem,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.WasteBin);
         //portal the item into Daily Doc
-        await linkGTDItemToDairy(r);
+        await r.linkGTDItemToDairy();
 
 
         //remove the GTD tag and related properties
-        await r.removeTag(gtdHost._id)
+        await r.rem.removeTag(gtdHost._id)
     }
-    const wishesListHandler = async (r:Rem) =>{
-        await getContainedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.SomeDay);
+    const wishesListHandler = async (r:GTDItem) =>{
+        await r.getContainedWithOwner(ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.SomeDay);
         //move the item into Daily Doc
-        if(!await linkGTDItemToDairy(r))
+        if(!await r.linkGTDItemToDairy())
         {
             //DONE: add it to Card Practice as a reminder
             //todo : maybe a default option for "Tick Type" named "unspecified"?
             // or just enable users to setup their own properties under the properties?
             // (partially done: `utils.getPropertyRemOfHostAsRemWithBuiltinOptions` ready)
 
-            const propRem= await utils.setUpEnumValForHostProperty(r,tlkPW,TIME_TK_PW_CODE.TICK_TYPE.LOG)
+            const propRem= await utils.setUpEnumValForHostProperty(r.rem,tlkPW,TIME_TK_PW_CODE.TICK_TYPE.LOG)
             await propRem?.setEnablePractice(true);
             await propRem?.setPracticeDirection("forward");
             // await plugin.app.toast("Date to reminder is default.").then(()=>{
@@ -864,24 +865,24 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         }
         //remove the GTD tag and related properties
-        await r.removeTag(gtdHost._id);
+        await r.rem.removeTag(gtdHost._id);
     }
-    const nowListHandler = async (r:Rem)=>{
-        await r.setIsTodo(true);
+    const nowListHandler = async (r:GTDItem)=>{
+        await r.rem.setIsTodo(true);
         // "NOW" items need not be removed from the tableview for it shall be processed at once.
-        await getCollectedWithOwner(r,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)
-        plugin.event.addListener(AppEvents.RemChanged,r._id,async ()=>{
+        await r.getCollectedWithOwner(ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)
+        plugin.event.addListener(AppEvents.RemChanged,r.rem._id,async ()=>{
             gtdListenerQueue= gtdListenerQueue.then(async ()=>{
 
-                if((await r.getTodoStatus())==="Finished")
+                if((await r.rem.getTodoStatus())==="Finished")
                 {
                     //remove the tag "GTD items"
-                    await r.removeTag(gtdHost._id)
+                    await r.rem.removeTag(gtdHost._id)
                     //(await utils.getHostRemOf(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW, ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now) as Rem)
-                    await utils.dropOutRedundantLink(r,
+                    await utils.dropOutRedundantLink(r.rem,
                         async (ref)=>ref.parent===(await utils.getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)as Rem)._id)
 
-                    plugin.event.removeListener(AppEvents.RemChanged,r._id);
+                    plugin.event.removeListener(AppEvents.RemChanged,r.rem._id);
                 }
             })
 
@@ -976,7 +977,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                     const handle=handlerMap.get(actCommand.trim());
                     if(handle&&await isTaggedWithHost(gtdHost._id,it)){
                         //handlerQueue=handlerQueue ? handlerQueue.then(async ()=>{await handle(it);}) : handle(it);
-                        await handle(it);
+                        const gtdIt= new GTDItem(it,plugin,utils)
+                        await handle(gtdIt);
                     }
                 }
             }
