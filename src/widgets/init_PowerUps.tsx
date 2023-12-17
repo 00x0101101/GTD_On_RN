@@ -23,8 +23,9 @@ import {
 } from './consts';
 import moment from 'moment';
 import _ from 'lodash';
+import { getUtils } from './utils';
 
-export let utils:{[key:string]:(...args: any[])=> any }
+// export let utils:{[key:string]:(...args: any[])=> any }
 
 //region utility Functions to process Typescript Objects
 const allKeyObj=(obj:{[key:string]:string})=>{
@@ -51,6 +52,9 @@ let  gtdListenerQueue=new Promise<void>((resolve, reject)=>{resolve()})
 
 
 export const init_PowerUps =async (plugin:ReactRNPlugin) => {
+
+    const utils=await getUtils(plugin);
+
 
     //region Functions to deploy templates from powerUps to hosts
 
@@ -158,7 +162,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
 
         await property?.addTag(slot)
-        slot.text &&   await updateRemTextWithCreationDebounce(property,slot.text)  // await property?.setText(slot.text);
+        slot.text &&   await utils.updateRemTextWithCreationDebounce(property,slot.text)  // await property?.setText(slot.text);
         await property?.setIsProperty(options===HostType.PROPERTY);
         return property;
     }
@@ -217,235 +221,10 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
 
 
-    //region util Functions
-
-    const debounceMap=new Map<string,number>();
-    const freqLimitsPerSpan=5;
-    const freqSpanInMS=1500;
-    let spanTimerHandler:NodeJS.Timer|null=null;
-    /**
-     * todo:
-     * a function wrapping `rem.setText` to detect explosive rem creation with duplicate context
-     * to protect users' note from potential crash on this plugin
-     */
-    async function updateRemTextWithCreationDebounce (r:Rem|undefined,text:RichTextInterface){
-        const hashKey=text.length.toString()+","+await plugin.richText.length(text);
-        const freqPerSpan=debounceMap.get(hashKey);
-
-
-        if(typeof freqPerSpan!=='number')
-        {
-            debounceMap.set(hashKey,0);
-            return
-        }
-
-        if(freqPerSpan>freqLimitsPerSpan)
-        {
-            await plugin.app.toast("Crash happened in GTD Plugin.").then(()=>{
-                setTimeout(()=>{
-                    plugin.app.toast("Please contact plugin author by committing a GitHub issue");
-                },3000)
-            })
-            throw new Error("Duplicate rem created violently");
-
-        }
-        if(!spanTimerHandler)
-            spanTimerHandler=setInterval(()=>{
-                debounceMap.clear();
-            },freqSpanInMS)
-        debounceMap.set(hashKey,freqPerSpan+1);
-
-        r?.setText(text);
-    }
 
 
 
-    /**
-     * tag children of `r` to be a GTD Item which is leaf rem without tag "Finished To-Do"
-     * @param r
-     */
-    const tagSubItem=async (r:Rem)=>{
-        if(await r.isTodo()&&"Finished"===await r.getTodoStatus())
-            return;
 
-        if(await r.getPortalType()===PORTAL_TYPE.PORTAL)
-            return;
-
-
-
-        let hasGotSubItem=false;
-
-        for(const child of await r.getChildrenRem())
-        {
-            if(await child.isTodo()&&"Finished"===await child.getTodoStatus())
-                continue;
-            if(child.text&&await plugin.richText.length(child.text))
-            {
-                if((await child.getChildrenRem()).length!==0)
-                    continue;
-                const rRefs = await child.remsBeingReferenced();
-
-                //if the child is a rem containing property values, it will not be added as a GTD item by this function
-
-
-                hasGotSubItem=true;
-                const resultArr=await Promise.all(rRefs.map(rr=>rr.isProperty()))
-                let suitForTag=!resultArr.filter(_.identity).length;
-
-                if(suitForTag)
-                {
-                    await child.addTag(gtdHost);
-                    // await next.addTag(gtdHost);
-                    await child.setTagPropertyValue(ownerPrjHost._id,await plugin.richText.rem(r).value())
-
-                }
-            }
-        }
-        //unexpected recurrent won't occur
-        //for the sub-item has not been project yet
-        //fixed: this thought is wrong for the creation of ref `next` will trigger the listener of `r`—— debounce filter has been added in `createReferenceFor`
-        if(!hasGotSubItem)
-        {
-            //fixed : Duplicate creation error triggered here "from argument `prjLike`"
-            const next=await createReferenceFor(r,r);
-            //await next.setText(await plugin.richText.text("Next Action of ").rem(r).value());
-            await updateRemTextWithCreationDebounce(next,await plugin.richText.text("Next Action ").value())
-            await next.setTagPropertyValue(ownerPrjHost._id,await plugin.richText.rem(r).value())
-
-            // const nextCallback=async ()=>{
-            //     plugin.event.removeListener(AppEvents.RemChanged,next._id,nextCallback);
-            //     const newNext=await createReferenceFor(r,r);
-            //     await updateRemTextWithCreationDebounce(next,await plugin.richText.text("Next Action ").value())
-            //
-            // }
-            // plugin.event.addListener(AppEvents.RemChanged,next._id,nextCallback)
-        }
-    }
-
-    const dropOutRedundantLink =async (r:Rem,condition:(arg0: Rem)=>Promise<boolean>) => {
-        for(const refR of await r.remsReferencingThis())
-        {
-            if(await condition(refR))
-            {
-                await refR.remove()
-            }
-        }
-    }
-
-    const createRemWithText=async (text:RichTextInterface)=>{
-        const newRem=await plugin.rem.createRem() as Rem;
-        // await newRem.setText(text);
-        await updateRemTextWithCreationDebounce(newRem,text);
-        return newRem
-    }
-    //
-    /**
-     * literally. `undefined` will be returned if portal is failed to create
-     * @param r
-     * @param uniqUnder if set, duplicate portal within the children of `uniqUnder` will be removed
-     */
-    const createPortalFor=async (r:Rem,uniqUnder:undefined|Rem=undefined)=>{
-
-        if(uniqUnder)
-        {
-           for(const por of await r.portalsAndDocumentsIn())
-           {
-               if(por._id!==r._id&&por.parent===uniqUnder._id&&await por.getPortalType()===PORTAL_TYPE.PORTAL)
-                   return por;
-           }
-        }
-
-        const portal=await plugin.rem.createPortal();
-        if(!portal)return;
-        await r.addToPortal(portal);
-        if(uniqUnder)await portal.setParent(uniqUnder)
-        return portal;
-    }
-    /**
-     * create a reference rem for "r"
-     * @param r the rem to reference
-     * @param refParent If this parameter exists, the ref rem will be placed under this.
-     *        If this parameter exists and there has already been a ref under `r`, the existing ref will be returned without creating a new rem.
-     */
-    const createReferenceFor=async (r:Rem,refParent?:Rem)=>{
-        if(refParent)
-        {
-            for(const refR of await r.remsReferencingThis())
-            {
-                if(refR.parent===refParent._id)
-                    return refR
-            }
-        }
-
-        const refContent=await plugin.richText.rem(r).value()
-        const ref=await createRemWithText(refContent)
-        if(refParent)await ref.setParent(refParent)
-        return ref
-    }
-
-
-    /**
-     * get the property of `Host` as Rem and its builtin options, which is specified by `templateSlot`
-     * @param templateSlot the code of PW or PW slot tagging the property under the host.
-     * @return an `Array` containing 2 items: `[propertyRem:Rem, BuiltinOptions:Rem[] ]`, return `undefined` if template is not valid
-     */
-    const getPropertyRemOfHostAsRemWithBuiltinOptions = async (templateSlot:string) => {
-        const pwSlot=  await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,templateSlot)
-        if(!pwSlot)return undefined;
-        return  [await utils.getHostRemOf(pwSlot) as Rem,await pwSlot.getChildrenRem()] as const;
-    }
-
-
-
-    /**
-     * set one property for the rem `r` tagged with the host, in a way Plugin Builtin function `r.setPowerupProperty`  does
-     * @param r
-     * @param templateSlot the code of powerUp/powerUpProperty as template, or the template PW rem itself.
-     * @param valEnum the template PW enum code having generated the enum values to select
-     * @return the rem containing `r.property` modified in this function
-     */
-    const setUpEnumValForHostProperty=async (r:Rem,templateSlot:string|Rem,valEnum:string)=>{
-        const getSlotWithOpts =async ()=>{
-            if(typeof templateSlot==="string")
-            {
-                return await getPropertyRemOfHostAsRemWithBuiltinOptions(templateSlot)
-            }
-            else
-            {
-                return [templateSlot, await (await getHostRemOf(templateSlot)).getChildrenRem()] as const
-            }
-        }
-        const arr=await getSlotWithOpts();
-
-        if(!arr)return;
-
-        const slotHost= arr[0];
-        for(const opt of arr[1])
-        {
-            if(!await opt.isPowerupEnum()||!opt.text)continue;
-            if(valEnum===await plugin.richText.toString(opt.text))
-            {
-                const optHost=await getHostRemOf(opt)as Rem;
-                await r.setTagPropertyValue(slotHost._id,await utils.createRefFor(optHost))
-            }
-        }
-        return await r.getTagPropertyAsRem(slotHost._id);
-    }
-
-
-
-    //endregion
-
-
-    utils={
-        hostUniqueCheck:hostUniqueCheck,
-        hostUniqueRectify:hostUniqueRectify,
-        supplyHostPropertyValue:supplyHostPropertyVal,
-        genHostPropertiesWithLog:genHostPropertiesWithLog,
-        getHostRemOf:getHostRemOf,
-        getAllPropOf:getAllPropOf,
-        createRefFor:createReferenceFor,
-    }
 
     //region Init PowerUps
 
@@ -590,7 +369,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         if(flag)
         {
-            const remRef= await createReferenceFor(gtdContainerInterface,sidebar);
+            const remRef= await utils.createReferenceFor(gtdContainerInterface,sidebar);
             await remRef.setBackText(await plugin.richText.text("this rem cannot be removed or the container will be duplicated in the sidebar. If you don't wanna this container interface shown in sidebar, just delete the portal with leaving this reference here.").value())
             await remRef.setPracticeDirection("none");
             await remRef.setEnablePractice(false);
@@ -706,7 +485,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
         if(!containerPW)return
         const container=await getHostRemOf(containerPW)
-        container &&r  && ( indirectMoveByPortal? (await createPortalFor(r,container)) : r.parent!==container._id &&  await r.setParent(container));
+        container &&r  && ( indirectMoveByPortal? (await utils.createPortalForItem(r,container)) : r.parent!==container._id &&  await r.setParent(container));
         return container
     }
 
@@ -753,7 +532,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         await stamp.setParent(daily);
         // await stamp.setText(stampRichText);
-        await updateRemTextWithCreationDebounce(stamp,stampRichText);
+        await utils.updateRemTextWithCreationDebounce(stamp,stampRichText);
         await stamp.addPowerup(TIME_TK_PW_CODE.TICK_PW);
         return stamp;
     }
@@ -813,7 +592,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             // copy the Priority (timeline type) from the item's property to the time tick's one.
             if(stamp)
             {
-                link=link || await createPortalFor(r,stamp);
+                link=link || await utils.createPortalForItem(r,stamp);
                 await link?.setParent(stamp);
 
 
@@ -861,7 +640,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
      */
     const createContainedITEMWithRichText =async (text: RichTextInterface, itemType: string = ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project) => {
         if(text.length===0)return
-        const newRem=await createRemWithText(text)
+        const newRem=await utils.createRemWithText(text)
         await getCollected(newRem,itemType)
         return newRem
         //todo: it is the work of next stage to introduce the "Natural Planning Model" functionality to the action tag "Project"
@@ -919,14 +698,14 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             {
                 const owner=ownerPropertyAsRems[0]
                 await r.setParent(owner)
-                await createReferenceFor(r,await getCollected(undefined,actionCode))
+                await utils.createReferenceFor(r,await getCollected(undefined,actionCode))
                 return OwnerState.UNIQUE
             }
             //when this item belongs to multiple project.
             else if(ownerPropertyAsRems.length>1){
                 for(const owner of ownerPropertyAsRems)
                 {
-                    await createReferenceFor(r,owner)
+                    await utils.createReferenceFor(r,owner)
                 }
 
                 return OwnerState.NOT_UNIQUE
@@ -1095,7 +874,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 {
                     plugin.event.removeListener(AppEvents.RemChanged,r._id);
                 }
-                await tagSubItem(r);
+                await utils.tagSubItem(r);
 
             }
 
@@ -1146,9 +925,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //DONE: add it to Card Practice as a reminder
             //todo : maybe a default option for "Tick Type" named "unspecified"?
             // or just enable users to setup their own properties under the properties?
-            // (partially done: `getPropertyRemOfHostAsRemWithBuiltinOptions` ready)
+            // (partially done: `utils.getPropertyRemOfHostAsRemWithBuiltinOptions` ready)
 
-            const propRem= await setUpEnumValForHostProperty(r,tlkPW,TIME_TK_PW_CODE.TICK_TYPE.LOG)
+            const propRem= await utils.setUpEnumValForHostProperty(r,tlkPW,TIME_TK_PW_CODE.TICK_TYPE.LOG)
             await propRem?.setEnablePractice(true);
             await propRem?.setPracticeDirection("forward");
             // await plugin.app.toast("Date to reminder is default.").then(()=>{
@@ -1173,7 +952,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                     //remove the tag "GTD items"
                     await r.removeTag(gtdHost._id)
                     //(await getHostRemOf(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW, ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now) as Rem)
-                    await dropOutRedundantLink(r,
+                    await utils.dropOutRedundantLink(r,
                         async (ref)=>ref.parent===(await getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)as Rem)._id)
 
                     plugin.event.removeListener(AppEvents.RemChanged,r._id);
