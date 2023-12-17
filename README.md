@@ -55,6 +55,7 @@ The GTD item will be processed automatically and moved to corresponding Containe
 5. `TIMELINE_TYPE` is the level of  `THE_DATE` & `TIME_TICK`. Obviously it denotes the priority of the item.
 6. `MESSAGE` contains other messages that you need to show in the right/bottom of the item.
 7. `TREAT_AS` assigns the type of the item. Once this property has been set, specific actions will be triggered.
+8. `Disabled` assigns whether the GTD item is deactivated. if toggled to "√", all the handlers will be muzzled until the checkbox is unchecked next time. 
 
 ## Options of `TREAT_AS` property and their corresponding actions
 

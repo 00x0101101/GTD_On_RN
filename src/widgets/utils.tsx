@@ -27,11 +27,13 @@ export const getUtils=async (plugin:ReactRNPlugin)=>{
     const tick_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIME_TICK) as Rem
     const tlkPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE) as Rem
     const scenePW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.SCENARIO) as Rem
+    const disablePW = await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.DISABLED) as Rem
     const dateHost=await getHostRemOf(date_host_pw);
     const tickHost=await getHostRemOf(tick_host_pw);
     const sceneHost=await getHostRemOf(scenePW);
     const timeLineTypeHost=await getHostRemOf(tlkPW);
-    const hosts=[gtdHost,ownerPrjHost,dateHost,tickHost,sceneHost,timeLineTypeHost]
+    const disablerHost=await getHostRemOf(disablePW);
+    const hosts=[gtdHost,ownerPrjHost,dateHost,tickHost,sceneHost,timeLineTypeHost,disablerHost]
 
     return new Utils(plugin,hosts)
 }
@@ -46,6 +48,7 @@ export class Utils{
     readonly tickHost: Rem;
     readonly sceneHost: Rem;
     readonly timeLineTypeHost: Rem;
+    readonly disablerHost:Rem;
     constructor(plugin: ReactRNPlugin,hosts: Rem[]) {
         this.plugin = plugin;
         this.gtdHost=hosts[0];
@@ -54,23 +57,15 @@ export class Utils{
         this.tickHost=hosts[3];
         this.sceneHost=hosts[4];
         this.timeLineTypeHost=hosts[5];
+        this.disablerHost=hosts[6];
         this.getHostRemOf=getHostRemOf;
     }
-
-    // public async init()
-    // {
-    //     const gtd_host_pw = await this.plugin.powerup.getPowerupByCode(GTD_HOST_PW) as Rem;
-    //     this.gtdHost = await getHostRemOf(gtd_host_pw);
-    //     const ownerPrjPW =await this.plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW, GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_ITEM) as Rem
-    //     this.ownerPrjHost = await getHostRemOf(ownerPrjPW);
-    // }
 
 
 
 
 
     /**
-     * todo:
      * a function wrapping `rem.setText` to detect explosive rem creation with duplicate context
      * to protect users' note from potential crash on this plugin
      */
@@ -184,7 +179,7 @@ export class Utils{
         await this.updateRemTextWithCreationDebounce(newRem,text);
         return newRem
     }
-//
+
     /**
      * literally. `undefined` will be returned if portal is failed to create
      * @param r
@@ -207,6 +202,7 @@ export class Utils{
         if(uniqUnder)await portal.setParent(uniqUnder)
         return portal;
     }
+
     /**
      * create a reference rem for "r"
      * @param r the rem to reference

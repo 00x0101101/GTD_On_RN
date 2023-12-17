@@ -1,8 +1,12 @@
-import { PORTAL_TYPE, ReactRNPlugin, Rem, RichTextInterface, RNPlugin } from '@remnote/plugin-sdk';
-import { ACT_OPTIONS_LOGGER_PW_CODE, GTD_LOGGER_PW_CODE, OwnerState, TIME_TK_PW_CODE } from './consts';
+import { AppEvents, PORTAL_TYPE, ReactRNPlugin, Rem, RichTextInterface, RNPlugin } from '@remnote/plugin-sdk';
+import { ACT_OPTIONS_LOGGER_PW_CODE, GTD_ACTIVE_PW, GTD_LOGGER_PW_CODE, OwnerState, TIME_TK_PW_CODE } from './consts';
 import { Utils } from './utils';
 import _ from 'lodash';
 
+
+/**
+ * a class to wrap a rem as an GTD Item
+ */
 export class GTDItem{
     readonly rem: Rem;
     private plugin: ReactRNPlugin;
@@ -13,6 +17,24 @@ export class GTDItem{
         this.utils=util;
     }
 
+    /**
+     * check whether a rem is tagged by the host
+     * @param hostId the id of the specific host
+     */
+    public async isTaggedWithHost(hostId:string){
+        const tags=await this.rem.getTagRems()
+        for(const typeParent of tags)
+        {
+            if(hostId===typeParent._id)
+                return true
+        }
+        return false
+    }
+
+    /**
+     * literally. `undefined` will be returned if portal is failed to create
+     * @param uniqUnder if set, duplicate portal within the children of `uniqUnder` will be removed
+     */
     public async createPortalForItem(uniqUnder:undefined|Rem=undefined){
 
         if(uniqUnder)
@@ -30,6 +52,46 @@ export class GTDItem{
         if(uniqUnder)await portal.setParent(uniqUnder)
         return portal;
     }
+
+    /**
+     * Enable a GTD item to muzzle its GTD handlers when its property `disabled` is toggled,
+     * by removing the `active item` power up when `disabled` is toggled or removed.
+     *
+     * Can be understood as an implementation of "soft deletion".
+     */
+    public async activateEnablerListener()
+    {
+        const handler=async ()=>{
+            if(!await this.isTaggedWithHost(this.utils.gtdHost._id))
+            {
+                this.plugin.event.removeListener(AppEvents.RemChanged,this.rem._id,handler);
+                return;
+            }
+            const enablerCondStr= await this.getEnabledCondStr();
+            if("Yes"===enablerCondStr)
+            {
+                await this.rem.removePowerup(GTD_ACTIVE_PW.PW);
+            }
+            else if("No"===enablerCondStr)
+            {
+                await this.rem.addPowerup(GTD_ACTIVE_PW.PW);
+            }
+
+        }
+        this.plugin.event.addListener(AppEvents.RemChanged,this.rem._id,handler)
+    }
+
+    public async getEnabledCondStr(){
+        let enablerCondRichText = await this.rem.getTagPropertyValue(this.utils.disablerHost._id);
+        return await this.plugin.richText.toString(enablerCondRichText);
+    }
+
+    public async setIsEnabled(isEnabled:boolean){
+        let enablerCondStr=isEnabled ? "Yes":"No";
+        let enablerCondRichText=await this.plugin.richText.text(enablerCondStr).value();
+        await this.rem.setTagPropertyValue(this.utils.disablerHost._id,enablerCondRichText);
+    }
+
 
     public async createReferenceUnder(refParent?:Rem){
         if(refParent)
@@ -225,9 +287,8 @@ export class GTDItem{
      * the "getCollect" logic for item rem with `Owner` property, supplement logic for these rems has been integrated into this function.
      *
      * when `OwnerState.INVALID_4_SRC_NOT_EXIST` or `OwnerState.NOT_UNIQUE` was returned by `getCollectedWithOwner` in this function,
-     * `r` will be collected into the container `actionCode` specified.
+     * `this.rem` will be collected into the container `actionCode` specified.
      *
-     * @param r item rem to collect
      * @param actionCode  which container does "r" go?
      */
     public async getContainedWithOwner(actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project){
@@ -281,5 +342,8 @@ export class GTDItem{
         return true
 
     }
+
+
+
 
 }

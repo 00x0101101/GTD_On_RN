@@ -5,9 +5,7 @@ import {
     PropertyType,
     ReactRNPlugin,
     Rem,
-    RichTextInterface,
     SelectSourceType,
-    SetRemType,
 } from '@remnote/plugin-sdk';
 import {
     ACT_OPTIONS_LOGGER_PW_CODE, GTD_ACTIVE_PW,
@@ -15,12 +13,9 @@ import {
     GTD_LOGGER_PW_CODE,
     HostCheckResult,
     HostType,
-    OwnerState,
     PW2SLOTS,
     TIME_TK_PW_CODE,
 } from './consts';
-import moment from 'moment';
-import _ from 'lodash';
 import { getUtils } from './utils';
 import { GTDItem } from './GTDItem';
 
@@ -181,9 +176,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     const date_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.THE_DATE)
     const tick_host_pw=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIME_TICK)
     const tlkPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE)
-    const ownerPrjPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_ITEM) as Rem
     const scenePW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.SCENARIO) as Rem
-
+    const activeItemPW=await plugin.powerup.getPowerupByCode(GTD_ACTIVE_PW.PW) as Rem
 
     var utils=await getUtils(plugin);
 
@@ -236,9 +230,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     const timeLineTypeHost=await utils.getHostRemOf(tlkPW);
     const gtdHost=await utils.getHostRemOf(gtd_host_pw);
-    const dateHost=await utils.getHostRemOf(date_host_pw);
-    const tickHost=await utils.getHostRemOf(tick_host_pw);
-    const ownerPrjHost=await utils.getHostRemOf(ownerPrjPW);
     const sceneHost=await utils.getHostRemOf(scenePW);
     await sceneHost.setIsDocument(true);
 
@@ -283,7 +274,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         name:"Into GTD Tray",
         action:async ()=>{
             let focus=await plugin.focus.getFocusedRem()
-            focus?.addTag(gtdHost)
+            await focus?.addTag(gtdHost)
+            await focus?.addPowerup(GTD_ACTIVE_PW.PW)
         }
     })
     await plugin.app.registerCommand({
@@ -294,6 +286,19 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         action:async ()=>{
             const focus=await plugin.focus.getFocusedRem()
             focus?.addPowerup(TIME_TK_PW_CODE.TICK_PW)
+        }
+    })
+
+    await plugin.app.registerCommand({
+        id:"clear_all_inactive_gtd_item",
+        quickCode:"clrig",
+        name:"Clear all disabled GTD Items",
+        action:async ()=>{
+            const items=await gtdHost.taggedRem();
+            for(const it of items) {
+                if(!await it.hasPowerup(GTD_ACTIVE_PW.PW))
+                    await it.removeTag(gtdHost._id,true)
+            }
         }
     })
 
@@ -466,244 +471,26 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
 
 
-    //region Functions for properties handling (except "Treat as" actions.)
-
-    /**
-     * get the property specified by "propertyId" of the rem "r" and return it as Rem
-     * @param r
-     * @param propertyId
-     * @return
-     *
-     * when the property to return does not contain a reference, the param "type" will be ignored and the plain text itself will be returned.
-     *
-     * when `type==="Rem"` and the property to return contains a reference, but the Rem cannot be found (e.g. Privacy Rem or Deleted Rem), the function will return this id despite the "type" parameter
-     */
-    async function getPropertyOfRemAsRems(r:Rem,propertyId:string) {
-        let propertyRichText=await r.getTagPropertyValue(propertyId)
-        let results:string[];
-        results=_.uniq<string>(await plugin.richText.getRemIdsFromRichText(propertyRichText))
-        const resultRems=await plugin.rem.findMany(results)
-        if(resultRems?.length)
-            return resultRems
-    }
-
-    //region Functions to process time-related things, like stamps and ticks
 
 
 
-    /**
-     * get the  RemIds  "THE_DATE" property of a GTD item refers to.
-     *
-     * In ideal condition the RemIds this function returns should be the id of a Daily Document(please check this if necessary)
-     * @param r the rem to query, tagged as a GTD item
-     */
-    async function getDateRemIdWithProperty(r:Rem) {
-
-        return await getPropertyOfRemAsRems(r,dateHost._id) as Rem[]
-
-
-    }
-    /**
-     * link gtd item "r" to the daily doc and time stamp the property "r.THE_DATE" and "r.TIME_TICK" specify.
-     * @return the actual anchor link in daily doc as timestamp if "r.THE_DATE" exists.
-     * @param r the GTD item rem to link
-     * @param link the anchor link in the Daily doc pointing at "r". (optional input, will be a new portal containing "r" if left void in the arguments)
-     */
-    const linkGTDItemToDairy=async (r:Rem,link?:Rem)=>{
-        const dateRems=await getDateRemIdWithProperty(r);
-        if(!dateRems)return;
-
-        if(dateRems.length)
-        {
-            const dateRem=dateRems[0]
-            //get the "time tick" property
-            let tick=await r.getTagPropertyValue(tickHost._id);
-            //get the "time tick" rem
-            let tickRemL=await plugin.richText.getRemIdsFromRichText(tick);
-
-
-            //the var "stamp" has 3 types
-            //1. if the GTD item "r" has no property "TimeTick", "stamp" will be the daily doc
-            //2. if the "TimeTick" property of "r" is plain text, a new stamp tagged with "Time Tick" powerUp will be created, whose content will be the plain text
-            //3. if the "TimeTick" property of "r" is a reference to another rem, "stamp" will be that rem.
-            let stamp= await plugin.richText.length(tick) ?
-                (tickRemL.length===0 ? await utils.setupStampWithRichText(dateRem,tick): await plugin.rem.findByName(await plugin.richText.text(tickRemL[0]).value(),dateRem._id))
-                : dateRem;
-
-            if(stamp?._id!==dateRem._id)await stamp?.setParent(dateRem)
-
-            // copy the Priority (timeline type) from the item's property to the time tick's one.
-            if(stamp)
-            {
-                link=link || await utils.createPortalForItem(r,stamp);
-                await link?.setParent(stamp);
-
-
-                // Time ticks add in the previous step need to be tagged with PW "TimeTick" and assign the property "TickType"
-                //DONE: Change the property name "DDL" under "GTD Items" to "the DATE" and Add a property "DATE Type" with "Deadline/Warning/Informing/LogTick" to select
-
-                const timeLineTypePropVal=await r.getTagPropertyValue(timeLineTypeHost._id);
-
-                const timeLineTypePropRem=await r.getTagPropertyAsRem(timeLineTypeHost._id);
-                const timeLTypeOpts= timeLineTypePropRem && ((await timeLineTypePropRem.remsBeingReferenced()))?.filter(r=>r._id!==timeLineTypeHost._id)
-                console.assert(!!timeLTypeOpts)
-                if(!(timeLTypeOpts&&timeLTypeOpts.length))return
-                const optVal=(await timeLTypeOpts[0].getTagRems())[0];
-                if(await stamp.hasPowerup(TIME_TK_PW_CODE.TICK_PW)&&timeLineTypePropVal.length)
-                {
-                    const slotRem=await plugin.powerup.getPowerupSlotByCode(TIME_TK_PW_CODE.TICK_PW,TIME_TK_PW_CODE.TICK_SLOT);
-                    if(!slotRem)await plugin.app.toast("Where is the slot : "+ TIME_TK_PW_CODE.TICK_SLOT)
-                    else
-                    {
-                        for( const optEnum of await slotRem?.getChildrenRem())
-                        {
-                             if(optEnum.text&&optVal.text&&await plugin.richText.equals(optEnum.text,optVal.text)&&await optEnum.isPowerupEnum())
-                             {
-                                 const ref2OptEnum=await plugin.richText.rem(optEnum).value();
-                                 await stamp.setPowerupProperty(TIME_TK_PW_CODE.TICK_PW,TIME_TK_PW_CODE.TICK_SLOT,ref2OptEnum);
-                             }
-                        }
-                    }
-                }
-            }
-            return stamp
-
-        }
-    }
-    //endregion
-
-
-    //region Functions and variables to handle the "Owner Project" property
 
 
 
-    /**
-     * The **supplement of**  "getCollected" logic for rem with "Owner Project" property ( and mainly for rem with "treat as project" action)
-     *
-     * If the value of `owner_item` property
-     *
-     *  - is blank, function will return with `OwnerState.INVALID_4_SRC_NOT_EXIST`
-     *
-     *  - is text without references to rems, a new owner rem will be created with this text and `r` will be collected under that. Then `OwnerState.NOT_EXIST` will be returned
-     *
-     *  - contains only one reference to rem, the referenced rem will be the owner of `r` and get collected by that owner. Then `OwnerState.UNIQUE` will be returned
-     *
-     *  - contains  multiple references to rems, references to `r` will be created under all the referenced "owner" rem with `OwnerState.NOT_UNIQUE` returned.
-     *
-     * @param r the rem to collect/contain
-     * @param actionCode the action PW code specifying the corresponding container "r" could go to besides the `Owner rem`
-     * @return state code describing the value of `r.OWNER_ITEM(s)`
-     */
-    const getCollectedWithOwner=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project,)=>{
 
 
-        //the rems of "r.OwnerProject" if this property exists.
-        const ownerPropertyAsRems=await getPropertyOfRemAsRems(r,ownerPrjHost._id)
-        //if the property value is text without rem references.
-        if(!ownerPropertyAsRems||ownerPropertyAsRems.length===0)
-        {
-            //done : how about create a project with this property value?
-            //Q: need to know whether "taggedRems" include indirect tagged Rems?
-            //A: no problem, for there are specific API named "ancestorTagRems" and "descendantTagRems"
-            //Q: has other rems used the "tag channel"?
-            //A: "not yet" can be asserted after checking the code.
 
-            const newItem= await utils.createContainedITEMWithRichText(await r.getTagPropertyValue(ownerPrjHost._id))
-            if(!newItem)
-            {
-                return OwnerState.INVALID_4_SRC_NOT_EXIST
-            }
-            await r.setTagPropertyValue(ownerPrjHost._id,await plugin.richText.rem(newItem).value())
-            await r.setParent(newItem._id)
-            return OwnerState.NOT_EXIST
-        }
-        //if there are references in the value of property
-        else
-        {
-            //when owner Project is unique
-            if(ownerPropertyAsRems.length===1)
-            {
-                const owner=ownerPropertyAsRems[0]
-                await r.setParent(owner)
-                await utils.createReferenceFor(r,await utils.getCollected(undefined,actionCode))
-                return OwnerState.UNIQUE
-            }
-            //when this item belongs to multiple project.
-            else if(ownerPropertyAsRems.length>1){
-                for(const owner of ownerPropertyAsRems)
-                {
-                    await utils.createReferenceFor(r,owner)
-                }
+    //region Event handlers added here
 
-                return OwnerState.NOT_UNIQUE
+    plugin.event.addListener(AppEvents.RemChanged,gtdHost._id,async ()=>{
+        const items =await gtdHost.taggedRem();
+        for(const it of items){
+            if(!await it.hasPowerup(GTD_ACTIVE_PW.PW)){
+                await it.addPowerup(GTD_ACTIVE_PW.PW);
             }
         }
+    })
 
-
-    }
-
-    /**
-     * the "getCollect" logic for item rem with `Owner` property, supplement logic for these rems has been integrated into this function.
-     *
-     * when `OwnerState.INVALID_4_SRC_NOT_EXIST` or `OwnerState.NOT_UNIQUE` was returned by `getCollectedWithOwner` in this function,
-     * `r` will be collected into the container `actionCode` specified.
-     *
-     * @param r item rem to collect
-     * @param actionCode  which container does "r" go?
-     */
-    const getContainedWithOwner=async (r:Rem,actionCode:string=ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project)=>{
-        const state=await getCollectedWithOwner(r,actionCode)
-        if(state===OwnerState.INVALID_4_SRC_NOT_EXIST||state===OwnerState.NOT_UNIQUE)
-        {
-            (await utils.getCollected(r, actionCode, OwnerState.INVALID_4_SRC_NOT_EXIST===state&&r.parent!==gtdHost._id))
-        }
-    }
-
-    //endregion
-
-    //region Functions to handle the "Scenario" property
-
-    /**
-     * the logic to process rems with "r.Scenario" property. it will
-     * 1. get scenario contained and cached in the `SCENARIO` property under the `HOST` tableview.
-     * @param r
-     * @return a boolean value indicating where the rem "r" has property "r.Scenario"
-     */
-    const getContainedWithScenario=async (r:Rem)=>{
-        //DONE: Scenario may contains peoples to delegate...
-
-        //region get scenario contained and cached in the host tableview.
-
-        //get the rems of "r.Scenario" if this property exists.
-        const scenarioAsRem=await getPropertyOfRemAsRems(r,sceneHost._id)
-        //if the property value is text without rem references.
-        if(!scenarioAsRem||scenarioAsRem.length === 0)
-        {
-            //add this scenario to be a potential option of `SCENARIO` property
-            const newScenario=await utils.createContainedITEMWithRichText(await r.getTagPropertyValue(sceneHost._id),ACT_OPTIONS_LOGGER_PW_CODE.ASPECT_CONTAINERS.SCENARIO)
-            if(!newScenario)
-            {
-                // await getCollected(r,actionCode);
-                return false;
-            }
-            await newScenario?.addTag(sceneHost)
-            await r.setTagPropertyValue(sceneHost._id,await plugin.richText.rem(newScenario).value())
-        }
-        else
-        //if there are references in the value of property
-        // the referenced rem will become one  Scenario Option
-        {
-            for(const scene of scenarioAsRem)
-            {
-                await scene.setParent(sceneHost._id)
-                await scene.addTag(sceneHost)
-            }
-
-        }
-        //endregion
-        return true
-
-    }
     //add listener for Scenario rems, remove their tag of `SCENARIO` once they are not the children of `SceneHost`
     plugin.event.addListener(AppEvents.RemChanged,sceneHost._id,async ()=>{
 
@@ -730,7 +517,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     })
     //endregion
 
-    //endregion
+
 
 
 
@@ -750,7 +537,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //create reference of "r" in Daily Doc
             await r.linkGTDItemToDairy()
             //remove the tag "GTD items"
-            await r.rem.removeTag(gtdHost._id)
+            await r.setIsEnabled(false)
         }
         else
         {
@@ -769,7 +556,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         //portal the item into Daily Doc
         await r.linkGTDItemToDairy()
         //remove the tag "GTD items"
-        await r.rem.removeTag(gtdHost._id)
+        await r.setIsEnabled(false)
 
     }
     const projectListHandler=async (r:GTDItem) =>{
@@ -784,7 +571,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
 
         //remove the tag "GTD items"
-        await r.rem.removeTag(gtdHost._id)
+        await r.setIsEnabled(false)
         await r.rem.addTag(prjContainer._id)
     }
 
@@ -833,7 +620,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
 
         //remove the tag "GTD items"
-        await r.rem.removeTag(gtdHost._id)
+        await r.setIsEnabled(false)
     }
     const wasteListHandler = async (r:GTDItem) =>{
         await utils.getCollected(r.rem,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.WasteBin);
@@ -842,7 +629,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
 
         //remove the GTD tag and related properties
-        await r.rem.removeTag(gtdHost._id)
+        await r.setIsEnabled(false)
     }
     const wishesListHandler = async (r:GTDItem) =>{
         await r.getContainedWithOwner(ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.SomeDay);
@@ -865,7 +652,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         }
         //remove the GTD tag and related properties
-        await r.rem.removeTag(gtdHost._id);
+        await r.setIsEnabled(false);
     }
     const nowListHandler = async (r:GTDItem)=>{
         await r.rem.setIsTodo(true);
@@ -877,7 +664,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 if((await r.rem.getTodoStatus())==="Finished")
                 {
                     //remove the tag "GTD items"
-                    await r.rem.removeTag(gtdHost._id)
+                    await r.setIsEnabled(false)
                     //(await utils.getHostRemOf(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW, ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now) as Rem)
                     await utils.dropOutRedundantLink(r.rem,
                         async (ref)=>ref.parent===(await utils.getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)as Rem)._id)
@@ -892,20 +679,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     //region Init event listeners
 
-    /**
-     * check whether a rem is tagged by the host
-     * @param hostId the id of the specific host
-     * @param r the rem to check
-     */
-    const isTaggedWithHost=async (hostId:string,r:Rem)=>{
-        const tags=await r.getTagRems()
-        for(const typeParent of tags)
-        {
-            if(hostId===typeParent._id)
-                return true
-        }
-        return false
-    }
+
 
 
     const handlerMap=new Map(
@@ -958,11 +732,12 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 plugin.event.removeListener(AppEvents.RemChanged,slotHostAsActOption._id)
                 return
             }
-            let gtdItems=await gtdHost.taggedRem();
+            let activeGtdItems=await activeItemPW.taggedRem();
             // let handlerQueue:Promise<void>|null=null;
-            for(const it of gtdItems)
+            for(const it of activeGtdItems)
             {
-
+                const gtdIt= new GTDItem(it,plugin,utils)
+                await gtdIt.activateEnablerListener();
                 // the richText type of value specifying the expected treatment to a GTD item (e.g. Later/Delegate/SomeDay...)
                 const actVal=await  it.getTagPropertyValue(act_slot_host._id);
                 // the option rem is one kind of host that is created and tagged by the powerUp representing the option, and host will implement the functions for the Option-type property
@@ -975,9 +750,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 if(actIds[0]===slotHostAsActOption._id)
                 {
                     const handle=handlerMap.get(actCommand.trim());
-                    if(handle&&await isTaggedWithHost(gtdHost._id,it)){
+
+                    if(handle&&await gtdIt.isTaggedWithHost(gtdHost._id)){
                         //handlerQueue=handlerQueue ? handlerQueue.then(async ()=>{await handle(it);}) : handle(it);
-                        const gtdIt= new GTDItem(it,plugin,utils)
                         await handle(gtdIt);
                     }
                 }
