@@ -13,12 +13,18 @@ const GTD_LOGGER_CODE={
   TIMELINE_TYPE:"gttk",
   OWNER_ITEM:"goprj",
   TREAT_AS:"gact",
-  MESSAGE:"gmsg"
+  MESSAGE:"gmsg",
+  DISABLED:"gdab"
 }
 export const GTD_LOGGER_PW_CODE={
   LOGGER_PW:"engine_gtd",
   LOGGER_SLOTS:GTD_LOGGER_CODE
 }
+
+export const GTD_ACTIVE_PW={
+  PW:"act_gtd_item"
+}
+
 
 const actOptions={
   Later:"_wait",

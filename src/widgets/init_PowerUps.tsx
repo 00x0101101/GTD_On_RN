@@ -1,7 +1,6 @@
 import {
     AppEvents,
     BuiltInPowerupCodes,
-    filterAsync,
     PropertyLocation,
     PropertyType,
     ReactRNPlugin,
@@ -11,7 +10,7 @@ import {
     SetRemType,
 } from '@remnote/plugin-sdk';
 import {
-    ACT_OPTIONS_LOGGER_PW_CODE,
+    ACT_OPTIONS_LOGGER_PW_CODE, GTD_ACTIVE_PW,
     GTD_HOST_PW,
     GTD_LOGGER_PW_CODE,
     HostCheckResult,
@@ -79,7 +78,8 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE, 'TIMELINE_TYPE',PropertyLocation.BELOW, PropertyType.SINGLE_SELECT,SelectSourceType.Enum,TIME_TK_PW_CODE.TICK_TYPE],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.OWNER_ITEM, 'OWNER_ITEM',PropertyLocation.BELOW, PropertyType.SINGLE_SELECT,SelectSourceType.AnyRem,undefined],
         [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TREAT_AS, 'TREAT_AS',PropertyLocation.RIGHT, PropertyType.SINGLE_SELECT, SelectSourceType.Enum,allKeyObj(ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS)],
-        [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.MESSAGE, 'MESSAGE',PropertyLocation.ONLY_DOCUMENT, PropertyType.TEXT,undefined],
+        [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.MESSAGE, 'MESSAGE',PropertyLocation.ONLY_DOCUMENT, PropertyType.TEXT,undefined,undefined],
+        [GTD_LOGGER_PW_CODE.LOGGER_SLOTS.DISABLED,"Disabled",PropertyLocation.RIGHT,PropertyType.CHECKBOX,undefined,undefined]
     ];
     await plugin.app.registerPowerup('GTD Engine', GTD_LOGGER_PW_CODE.LOGGER_PW,
         "A PowerUp marking up the properties under the host of the PowerUp tag 'GTD Engine Host' ", {
@@ -98,6 +98,9 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         });
     //endregion
 
+    await plugin.app.registerPowerup("Active Item",GTD_ACTIVE_PW.PW,"A power up to tag the active GTD items which has not been disabled yet.",{
+        slots:[]
+    })
 
     //region Init the Action Type Logger PW and Container PW
     const act_logger_slotCode_list=Object.entries(ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS)
@@ -484,34 +487,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     }
 
     //region Functions to process time-related things, like stamps and ticks
-    async function setupStampWithRichText(daily:Rem|undefined,stampRichText:RichTextInterface) {
-        if (!(daily)) {
-            await plugin.app.toast('Failed to Locate Dairy');
-            return;
-        }
-        let stamp = (await plugin.rem.findByName(stampRichText, daily._id)) || (await plugin.rem.createRem());
-        stamp?.setType(SetRemType.DESCRIPTOR);
-        if (!stamp) {
-            await plugin.app.toast('Failed to Create Stamp');
-            return;
-        }
 
-        await stamp.setParent(daily);
-        // await stamp.setText(stampRichText);
-        await utils.updateRemTextWithCreationDebounce(stamp,stampRichText);
-        await stamp.addPowerup(TIME_TK_PW_CODE.TICK_PW);
-        return stamp;
-    }
-    const createStampWithDate=async (date:Date|undefined)=>{
-        date=date||new Date();
-        let mo=moment(date);
-
-        let stampText=`${mo.format("HH:mm")}`
-        let stampRichText=await plugin.richText.text(stampText).value();
-        let daily=await plugin.date.getDailyDoc(date);
-
-        return await setupStampWithRichText(daily,stampRichText);
-    }
 
 
     /**
@@ -550,7 +526,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             //2. if the "TimeTick" property of "r" is plain text, a new stamp tagged with "Time Tick" powerUp will be created, whose content will be the plain text
             //3. if the "TimeTick" property of "r" is a reference to another rem, "stamp" will be that rem.
             let stamp= await plugin.richText.length(tick) ?
-                (tickRemL.length===0 ? await setupStampWithRichText(dateRem,tick): await plugin.rem.findByName(await plugin.richText.text(tickRemL[0]).value(),dateRem._id))
+                (tickRemL.length===0 ? await utils.setupStampWithRichText(dateRem,tick): await plugin.rem.findByName(await plugin.richText.text(tickRemL[0]).value(),dateRem._id))
                 : dateRem;
 
             if(stamp?._id!==dateRem._id)await stamp?.setParent(dateRem)

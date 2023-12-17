@@ -1,6 +1,7 @@
-import { filterAsync, PORTAL_TYPE, ReactRNPlugin, Rem, RichTextInterface } from '@remnote/plugin-sdk';
+import { filterAsync, PORTAL_TYPE, ReactRNPlugin, Rem, RichTextInterface, SetRemType } from '@remnote/plugin-sdk';
 import _, { gt } from 'lodash';
-import { ACT_OPTIONS_LOGGER_PW_CODE, GTD_HOST_PW, GTD_LOGGER_PW_CODE } from './consts';
+import { ACT_OPTIONS_LOGGER_PW_CODE, GTD_HOST_PW, GTD_LOGGER_PW_CODE, TIME_TK_PW_CODE } from './consts';
+import moment from 'moment/moment';
 
 
 const debounceMap=new Map<string,number>();
@@ -311,6 +312,36 @@ export class Utils{
         /*const prjActionHost=await getHostRemOf((await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.ACT_PW,ACT_OPTIONS_LOGGER_PW_CODE.ACT_SLOTS.Project)) as Rem);
           await newRem.addTag(prjActionHost._id);
         * */
+    }
+
+
+    public async setupStampWithRichText(daily:Rem|undefined,stampRichText:RichTextInterface) {
+        if (!(daily)) {
+            await this.plugin.app.toast('Failed to Locate Dairy');
+            return;
+        }
+        let stamp = (await this.plugin.rem.findByName(stampRichText, daily._id)) || (await this.plugin.rem.createRem());
+        stamp?.setType(SetRemType.DESCRIPTOR);
+        if (!stamp) {
+            await this.plugin.app.toast('Failed to Create Stamp');
+            return;
+        }
+
+        await stamp.setParent(daily);
+        // await stamp.setText(stampRichText);
+        await this.updateRemTextWithCreationDebounce(stamp,stampRichText);
+        await stamp.addPowerup(TIME_TK_PW_CODE.TICK_PW);
+        return stamp;
+    }
+    public async createStampWithDate(date:Date|undefined){
+        date=date||new Date();
+        let mo=moment(date);
+
+        let stampText=`${mo.format("HH:mm")}`
+        let stampRichText=await this.plugin.richText.text(stampText).value();
+        let daily=await this.plugin.date.getDailyDoc(date);
+
+        return await this.setupStampWithRichText(daily,stampRichText);
     }
 
 }
