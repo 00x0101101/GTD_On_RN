@@ -18,6 +18,8 @@ import {
 } from './consts';
 import { getUtils } from './utils';
 import { GTDItem } from './GTDItem';
+// @ts-ignore
+import { clearInterval } from 'timer';
 
 // export let utils:{[key:string]:(...args: any[])=> any }
 
@@ -463,20 +465,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
     //endregion
 
 
-
-
-
-
     const prjContainer=await utils.getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project) as Rem;
-
-
-
-
-
-
-
-
-
 
 
 
@@ -490,90 +479,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             }
         }
     })
-
-    //add listener for Scenario rems, remove their tag of `SCENARIO` once they are not the children of `SceneHost`
-    plugin.event.addListener(AppEvents.RemChanged,sceneHost._id,async ()=>{
-
-        gtdListenerQueue= gtdListenerQueue.then(async (value)=>{
-
-            const sceneSet=new Set<string>((await sceneHost.getDescendants()).map(r=>r._id))
-            //Note: a rem is representing a scenario only when it is a descendant of the "sceneHost"
-            for(const scene of (await sceneHost.taggedRem()))
-            {
-
-                if(scene.parent===sceneHost._id){
-                    //DONE maybe this `scene` is actually type of scenes in future version?
-                    // answer: a scene classifier is not a scene but a rem whose parent is "sceneHost" and that is not tagged by "sceneHost".
-                }
-                if ( sceneSet.has(scene._id) ){
-                    continue
-                }
-                await scene.removeTag(sceneHost._id)
-            }
-        })
-
-
-
-    })
-    //endregion
-
-
-
-
-
-    //region Definitions of event listener handler implementing "Treat as" actions.
-
-    const waitListHandler=async (r:GTDItem)=>{
-        let dateDocL=await r.getDateRemIdWithProperty()
-
-        // if specific time tick was not designated, place items into references of "Today" PowerUp at that DailyDoc
-        // (Or left them in the DailyDoc directly?)
-
-        if(dateDocL.length)
-        {
-
-            //move r into WAIT list
-            await r.getContainedWithOwner(ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Later)
-            //create reference of "r" in Daily Doc
-            await r.linkGTDItemToDairy()
-            //remove the tag "GTD items"
-            await r.setIsEnabled(false)
-        }
-        else
-        {
-            await plugin.app.toast("A date as a tip needed if you want make it LATER to do")
-        }
-    }
-    const awaitListHandler=async (r:GTDItem) =>{
-        await r.getContainedWithOwner(ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Delegate)
-
-        //DONE if "scenario" does not exist, a toast is needed to inform the user.
-        if(!await r.getContainedWithScenario())
-        {
-            await plugin.app.toast("Assignee(s) need to be specified in SCENARIO when you wanna delegate it to someone")
-        }
-        // XXX : I cannot come up with a better idea in such a haste
-        //portal the item into Daily Doc
-        await r.linkGTDItemToDairy()
-        //remove the tag "GTD items"
-        await r.setIsEnabled(false)
-
-    }
-    const projectListHandler=async (r:GTDItem) =>{
-        // move item rem into project folder and remove the tag "GTD items"
-        // await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project);
-        await r.getContainedWithOwner()
-
-        await r.linkGTDItemToDairy()
-
-        //the children of a project item should be a GTD item by default(except rems containing properties)
-        // plugin.event.removeListener(AppEvents.RemChanged,r._id)
-
-
-        //remove the tag "GTD items"
-        await r.setIsEnabled(false)
-        await r.rem.addTag(prjContainer._id)
-    }
 
     plugin.event.addListener(AppEvents.RemChanged,prjContainer._id,async ()=>{
         gtdListenerQueue= gtdListenerQueue.then(async ()=>{
@@ -605,8 +510,129 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
     })
 
+    //add listener for Scenario rems, remove their tag of `SCENARIO` once they are not the children of `SceneHost`
+    plugin.event.addListener(AppEvents.RemChanged,sceneHost._id,async ()=>{
+
+        gtdListenerQueue= gtdListenerQueue.then(async (value)=>{
+
+            const sceneSet=new Set<string>((await sceneHost.getDescendants()).map(r=>r._id))
+            //Note: a rem is representing a scenario only when it is a descendant of the "sceneHost"
+            for(const scene of (await sceneHost.taggedRem()))
+            {
+
+                if(scene.parent===sceneHost._id){
+                    //DONE maybe this `scene` is actually type of scenes in future version?
+                    // answer: a scene classifier is not a scene but a rem whose parent is "sceneHost" and that is not tagged by "sceneHost".
+                }
+                if ( sceneSet.has(scene._id) ){
+                    continue
+                }
+                await scene.removeTag(sceneHost._id)
+            }
+        })
 
 
+
+    })
+
+    const disablerHandler= async ()=>{
+        const refs=await utils.disablerHost.remsReferencingThis();
+        for(const ref of refs)
+        {
+            const itemId=ref.parent;
+            if(!itemId)continue;
+            const item=await ref.getParentRem();
+            if(!item)continue;
+            let disablerCondRichText = await item.getTagPropertyValue(utils.disablerHost._id);
+            const disablerCondStr=await plugin.richText.toString(disablerCondRichText);
+            if("Yes"===disablerCondStr)
+            {
+                await item.removePowerup(GTD_ACTIVE_PW.PW);
+            }
+            else if("No"===disablerCondStr)
+            {
+                await item.addPowerup(GTD_ACTIVE_PW.PW);
+            }
+        }
+    }
+
+    let disablerHandlerTimer:any=setInterval(disablerHandler,3600);
+
+    plugin.event.addListener(AppEvents.RemChanged,utils.disablerHost._id,async ()=>{
+        const refs=await utils.disablerHost.remsReferencingThis();
+
+        // if(refs.length>0)
+        // {
+        //     disablerHandlerTimer= setInterval(disablerHandler,3600);
+        // }
+        if(!!disablerHandlerTimer&&0===refs.length){
+            clearInterval(disablerHandlerTimer);
+            disablerHandlerTimer=null;
+        }
+        else if(!disablerHandlerTimer&&refs.length>0)
+        {
+            disablerHandlerTimer=setInterval(disablerHandler,3600);
+        }
+    })
+    //endregion
+
+
+
+
+
+    //region Definitions of event listener handler implementing "Treat as" actions.
+
+    const waitListHandler=async (r:GTDItem)=>{
+        let dateDocL=await r.getDateRemIdWithProperty()
+
+        // if specific time tick was not designated, place items into references of "Today" PowerUp at that DailyDoc
+        // (Or left them in the DailyDoc directly?)
+
+        if(dateDocL.length)
+        {
+
+            //move r into WAIT list
+            await r.getContainedWithOwner(ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Later)
+            //create reference of "r" in Daily Doc
+            await r.linkGTDItemToDairy()
+            //remove the tag "GTD items"
+            await r.setIsDisabled(true)
+        }
+        else
+        {
+            await plugin.app.toast("A date as a tip needed if you want make it LATER to do")
+        }
+    }
+    const awaitListHandler=async (r:GTDItem) =>{
+        await r.getContainedWithOwner(ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Delegate)
+
+        //DONE if "scenario" does not exist, a toast is needed to inform the user.
+        if(!await r.getContainedWithScenario())
+        {
+            await plugin.app.toast("Assignee(s) need to be specified in SCENARIO when you wanna delegate it to someone")
+        }
+        // XXX : I cannot come up with a better idea in such a haste
+        //portal the item into Daily Doc
+        await r.linkGTDItemToDairy()
+        //remove the tag "GTD items"
+        await r.setIsDisabled(true)
+
+    }
+    const projectListHandler=async (r:GTDItem) =>{
+        // move item rem into project folder and remove the tag "GTD items"
+        // await getCollected(r,ACT_OPTIONS_LOGGER_PW_CODE.CONTAIN_SLOTS.Project);
+        await r.getContainedWithOwner()
+
+        await r.linkGTDItemToDairy()
+
+        //the children of a project item should be a GTD item by default(except rems containing properties)
+        // plugin.event.removeListener(AppEvents.RemChanged,r._id)
+
+
+        //remove the tag "GTD items"
+        await r.setIsDisabled(true)
+        await r.rem.addTag(prjContainer._id)
+    }
 
     const refListHandler=async (r:GTDItem) =>{
         //move the item into the "REFERENCE/Successive Ones" folder
@@ -620,7 +646,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
 
         //remove the tag "GTD items"
-        await r.setIsEnabled(false)
+        await r.setIsDisabled(true)
     }
     const wasteListHandler = async (r:GTDItem) =>{
         await utils.getCollected(r.rem,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.WasteBin);
@@ -629,7 +655,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
 
         //remove the GTD tag and related properties
-        await r.setIsEnabled(false)
+        await r.setIsDisabled(true)
     }
     const wishesListHandler = async (r:GTDItem) =>{
         await r.getContainedWithOwner(ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.SomeDay);
@@ -652,7 +678,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
 
         }
         //remove the GTD tag and related properties
-        await r.setIsEnabled(false);
+        await r.setIsDisabled(true);
     }
     const nowListHandler = async (r:GTDItem)=>{
         await r.rem.setIsTodo(true);
@@ -664,7 +690,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
                 if((await r.rem.getTodoStatus())==="Finished")
                 {
                     //remove the tag "GTD items"
-                    await r.setIsEnabled(false)
+                    await r.setIsDisabled(true)
                     //(await utils.getHostRemOf(await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW, ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now) as Rem)
                     await utils.dropOutRedundantLink(r.rem,
                         async (ref)=>ref.parent===(await utils.getCollected(undefined,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Now)as Rem)._id)
@@ -737,7 +763,6 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             for(const it of activeGtdItems)
             {
                 const gtdIt= new GTDItem(it,plugin,utils)
-                await gtdIt.activateEnablerListener();
                 // the richText type of value specifying the expected treatment to a GTD item (e.g. Later/Delegate/SomeDay...)
                 const actVal=await  it.getTagPropertyValue(act_slot_host._id);
                 // the option rem is one kind of host that is created and tagged by the powerUp representing the option, and host will implement the functions for the Option-type property

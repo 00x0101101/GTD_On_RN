@@ -67,18 +67,24 @@ export class GTDItem{
                 this.plugin.event.removeListener(AppEvents.RemChanged,this.rem._id,handler);
                 return;
             }
-            const enablerCondStr= await this.getEnabledCondStr();
-            if("Yes"===enablerCondStr)
-            {
-                await this.rem.removePowerup(GTD_ACTIVE_PW.PW);
-            }
-            else if("No"===enablerCondStr)
-            {
-                await this.rem.addPowerup(GTD_ACTIVE_PW.PW);
-            }
+
 
         }
         this.plugin.event.addListener(AppEvents.RemChanged,this.rem._id,handler)
+    }
+
+
+
+    public async handleEnableOpr(){
+        const enablerCondStr= await this.getEnabledCondStr();
+        if("Yes"===enablerCondStr)
+        {
+            await this.rem.removePowerup(GTD_ACTIVE_PW.PW);
+        }
+        else if("No"===enablerCondStr)
+        {
+            await this.rem.addPowerup(GTD_ACTIVE_PW.PW);
+        }
     }
 
     public async getEnabledCondStr(){
@@ -86,10 +92,11 @@ export class GTDItem{
         return await this.plugin.richText.toString(enablerCondRichText);
     }
 
-    public async setIsEnabled(isEnabled:boolean){
-        let enablerCondStr=isEnabled ? "Yes":"No";
+    public async setIsDisabled(isDisabled:boolean){
+        let enablerCondStr=isDisabled ? "Yes":"No";
         let enablerCondRichText=await this.plugin.richText.text(enablerCondStr).value();
         await this.rem.setTagPropertyValue(this.utils.disablerHost._id,enablerCondRichText);
+        isDisabled ? await this.rem.removePowerup(GTD_ACTIVE_PW.PW): await this.rem.addPowerup(GTD_ACTIVE_PW.PW);
     }
 
 
