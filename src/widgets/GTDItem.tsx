@@ -148,7 +148,7 @@ export class GTDItem{
      */
     public async getDateRemIdWithProperty() {
 
-        return await this.getPropertyOfRemAsRems(this.utils.dateHost._id) as Rem[]
+        return await this.getPropertyOfRemAsRems(this.utils.dateHost._id);
 
 
     }
@@ -195,7 +195,7 @@ export class GTDItem{
                 const timeLineTypePropRem=await this.rem.getTagPropertyAsRem(this.utils.timeLineTypeHost._id);
                 const timeLTypeOpts= timeLineTypePropRem && ((await timeLineTypePropRem.remsBeingReferenced()))?.filter(r=>r._id!==this.utils.timeLineTypeHost._id)
                 console.assert(!!timeLTypeOpts)
-                if(!(timeLTypeOpts&&timeLTypeOpts.length))return
+                if(!(timeLTypeOpts&&timeLTypeOpts.length))return;
                 const optVal=(await timeLTypeOpts[0].getTagRems())[0];
                 if(await stamp.hasPowerup(TIME_TK_PW_CODE.TICK_PW)&&timeLineTypePropVal.length)
                 {
@@ -214,7 +214,7 @@ export class GTDItem{
                     }
                 }
             }
-            return stamp
+            return stamp;
 
         }
     }

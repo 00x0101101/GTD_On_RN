@@ -588,7 +588,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         // if specific time tick was not designated, place items into references of "Today" PowerUp at that DailyDoc
         // (Or left them in the DailyDoc directly?)
 
-        if(dateDocL.length)
+        if(dateDocL&&dateDocL.length)
         {
 
             //move r into WAIT list
