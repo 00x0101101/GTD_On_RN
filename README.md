@@ -2,8 +2,8 @@
 
 ## a plugin to make it smoother to use GTD on RN.
 
-## ⚠ Note:
-1. this plugin hasn't been published to the RemNote Plugin Marketplace yet for it  have just been constructed and is under alpha testing on my own device.
+## Note:
+This project is in beta and welcome to issue me, 謝謝!
 
 ## Introduction
 
@@ -34,9 +34,11 @@ Properties need to be configured are shown below with their configuration accord
 - after setting up the type and source type of the two properties `TIME_TYPE` and `TREAT_AS`, options to these properties should be loaded automatically. 
 ![](https://github.com/00x0101101/GTD_On_RN/blob/main/public/toturials/Quicker_20231108_174742.png)
 
+
 If you have already set some rem with similar functions, you can change the name of these properties to that same with those legacy rem  and merge them by click the "merge" button in the right.
 and the name of `Host`  is also editable. 
 
+The Property `DISABLED` is like the soft deletion mark `is_deleted` in databases. You can change its name to some words like `Arranged` as your wish.
 
 
 ## Usage

@@ -1,5 +1,12 @@
-import { filterAsync, PORTAL_TYPE, ReactRNPlugin, Rem, RichTextInterface, SetRemType } from '@remnote/plugin-sdk';
-import _, { gt } from 'lodash';
+import {
+    filterAsync,
+    PORTAL_TYPE,
+    ReactRNPlugin,
+    Rem,
+    RichTextInterface,
+    SetRemType,
+} from '@remnote/plugin-sdk';
+import _ from 'lodash';
 import { ACT_OPTIONS_LOGGER_PW_CODE, GTD_HOST_PW, GTD_LOGGER_PW_CODE, TIME_TK_PW_CODE } from './consts';
 import moment from 'moment/moment';
 
@@ -168,7 +175,17 @@ export class Utils{
         {
             if(await condition(refR))
             {
-                await refR.remove()
+
+                //what User needs is to remove the reference link insteadof removing the whole rem carrying the reference!
+                let text = refR.text;
+                if(text){
+                    text = text.filter((textEle)=>{
+                        return !("q"===textEle.i&&textEle._id===r._id)
+                    })
+                    await refR.setText(text);
+                }
+
+                // await refR.remove()
             }
         }
     }
