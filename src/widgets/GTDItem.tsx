@@ -273,6 +273,10 @@ export class GTDItem{
             {
                 const owner=ownerPropertyAsRems[0]
                 await this.rem.setParent(owner)
+                //TODO:  get the property "To Try" and "Tries"
+                // user can specify these two by themself, with tags `ToTry` and `Trails`
+                //1. any item which is both `not arranged` and `'r' is the items owner` will be collected under `To Try`.
+                //2. items `To try` will be moved to `Tries` when it is `arranged`
                 await this.utils.createReferenceFor(this.rem,await this.utils.getCollected(undefined,actionCode))
                 return OwnerState.UNIQUE
             }

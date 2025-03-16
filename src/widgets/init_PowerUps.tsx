@@ -304,6 +304,21 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         }
     })
 
+    await plugin.app.registerCommand({
+        id:"tag_all_children_into_tray",
+        quickCode:"agin",
+        name:"All Children Into GTD Tray",
+        action: async ()=>{
+            let focus=await plugin.focus.getFocusedRem()
+            if(!focus)return
+            for(let ch of await focus.getChildrenRem()){
+                await ch.addTag(gtdHost)
+                await ch.addPowerup(GTD_ACTIVE_PW.PW)
+            }
+        }
+
+    })
+
     //endregion
 
 
@@ -649,7 +664,7 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
         await r.setIsDisabled(true)
     }
     const wasteListHandler = async (r:GTDItem) =>{
-        await utils.getCollected(r.rem,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.WasteBin);
+        await utils.getCollected(r.rem, ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.WasteBin,true);
         //portal the item into Daily Doc
         await r.linkGTDItemToDairy();
 

@@ -69,7 +69,12 @@ export class Utils{
     }
 
 
-
+    public async hasTag(r:Rem,tagid:string|undefined){
+        if(!tagid)return false
+        let tagsOnItem = await r.getTagRems()
+        const idSet = new Set(tagsOnItem.map(rr=>rr._id))
+        return idSet.has(tagid)
+    }
 
 
     /**
@@ -302,11 +307,12 @@ export class Utils{
      * move GTD item "r" into one container rem in the Container Panel
      *
      * (collect, contain and complete the GTD items to become the conqueror of our daily issue \^_\^ )
-     * @param r GTD items to contain, if left void, the container will be returned without any
+     * Because move rem to the container may break the structure of original documents, `indirectMoveByPortal` may be `true`
+     * @param r GTD items to contain, if left void, the container will be returned without any changes
      * @param containerCode the code specifying the container rem
      * @param indirectMoveByPortal  if set to be true, `r` will get collected by leaving a portal under its owner instead of being moved to that one directly
      */
-    public async getCollected(r:Rem|undefined,containerCode:string,indirectMoveByPortal:boolean=false){
+    public async getCollected(r:Rem|undefined,containerCode:string,indirectMoveByPortal:boolean=true){
         let containerPW
         try {
             containerPW=(await this.plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,containerCode));

@@ -46,7 +46,13 @@ The Property `DISABLED` is like the soft deletion mark `is_deleted` in databases
 After determining the date, owner GTD item and scenario of a GTD item( or leaving them in blank), you can choose the options in "TREAT_AS" property.
 The GTD item will be processed automatically and moved to corresponding Container in the `GTD Container Panel` and/or Daily Document if its property `THE_DATE` is specified.
 
+## get item into tray
 
+You can use Remnote slash command "Into GTD Tray" (quick code as `gin`) to get focused rem into GTD Tray(i.e. `GTD Decision Panel`) 
+
+Or you can use any rem as tray then use slash command "All Children Into GTD Tray" (quick code as `agin`) to place its children into `GTD Dscision Panel` as "all the content of the tray"
+
+You can clear the soft-deleted items with slash command "Clear all disabled GTD Items" (quick code as `clrig`)
 
 ## Properties in the `HOST`
 
