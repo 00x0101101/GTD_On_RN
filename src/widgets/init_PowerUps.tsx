@@ -314,6 +314,16 @@ export const init_PowerUps =async (plugin:ReactRNPlugin) => {
             for(let ch of await focus.getChildrenRem()){
                 await ch.addTag(gtdHost)
                 await ch.addPowerup(GTD_ACTIVE_PW.PW)
+                let ancestor = await ch.getParentRem()
+                // the nearest ancestor with `Project` tag will be these children's ownerItem.
+                while(ancestor){
+                    if(await utils.hasTag(ancestor,utils.prjHost._id)){
+                        await ch.setTagPropertyValue(utils.ownerPrjHost._id,await plugin.richText.rem(ancestor).value())
+                        return
+                    }
+                    ancestor = await ancestor.getParentRem()
+                }
+
             }
         }
 

@@ -35,12 +35,14 @@ export const getUtils=async (plugin:ReactRNPlugin)=>{
     const tlkPW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.TIMELINE_TYPE) as Rem
     const scenePW=await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.SCENARIO) as Rem
     const disablePW = await plugin.powerup.getPowerupSlotByCode(GTD_LOGGER_PW_CODE.LOGGER_PW,GTD_LOGGER_PW_CODE.LOGGER_SLOTS.DISABLED) as Rem
+    const prjPW = await plugin.powerup.getPowerupSlotByCode(ACT_OPTIONS_LOGGER_PW_CODE.CONTAINER_PW,ACT_OPTIONS_LOGGER_PW_CODE.ACT_CONTAINER_SLOTS.Project) as Rem
     const dateHost=await getHostRemOf(date_host_pw);
     const tickHost=await getHostRemOf(tick_host_pw);
     const sceneHost=await getHostRemOf(scenePW);
     const timeLineTypeHost=await getHostRemOf(tlkPW);
     const disablerHost=await getHostRemOf(disablePW);
-    const hosts=[gtdHost,ownerPrjHost,dateHost,tickHost,sceneHost,timeLineTypeHost,disablerHost]
+    const prjHost = await getHostRemOf(prjPW);
+    const hosts=[gtdHost,ownerPrjHost,dateHost,tickHost,sceneHost,timeLineTypeHost,disablerHost,prjHost]
 
     return new Utils(plugin,hosts)
 }
@@ -56,6 +58,7 @@ export class Utils{
     readonly sceneHost: Rem;
     readonly timeLineTypeHost: Rem;
     readonly disablerHost:Rem;
+    readonly prjHost:Rem;
     constructor(plugin: ReactRNPlugin,hosts: Rem[]) {
         this.plugin = plugin;
         this.gtdHost=hosts[0];
@@ -65,6 +68,7 @@ export class Utils{
         this.sceneHost=hosts[4];
         this.timeLineTypeHost=hosts[5];
         this.disablerHost=hosts[6];
+        this.prjHost = hosts[7];
         this.getHostRemOf=getHostRemOf;
     }
 

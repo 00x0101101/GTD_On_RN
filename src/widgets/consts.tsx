@@ -85,6 +85,10 @@ export const TIME_TK_PW_CODE =  {
   TICK_TYPE:tickType
 }
 
+export const TRYS_PW_CODE= {
+  TO_TRY : "to_try",
+  TRAIL: "trail"
+}
 
 
 // mapping type
