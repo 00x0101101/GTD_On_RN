@@ -1,8 +1,8 @@
-# Python Data Science Frameworks - Simulink-like with Yellow/Orange Icons
+# Framework Reference: Orange Data Mining
 
 ## Orange Data Mining
 
-**Orange** is the most likely framework you're looking for based on your description.
+**Orange** is a visual programming framework that matches Simulink-like characteristics with a distinctive orange icon.
 
 ### Key Information:
 - **GitHub Repository**: https://github.com/biolab/orange3
@@ -54,4 +54,4 @@ If Orange isn't what you're looking for, here are other visual Python data scien
 
 ## Conclusion
 
-Based on your description of a "Simulink-like framework for Python data science projects with a yellow icon," **Orange Data Mining** is almost certainly the framework you're looking for.
+**Orange Data Mining** is a Simulink-like framework for Python data science projects, featuring a visual workflow interface and a distinctive orange/yellow icon, making it an excellent choice for visual data analysis and machine learning workflows.
