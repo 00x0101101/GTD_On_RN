@@ -54,4 +54,6 @@ If Orange isn't what you're looking for, here are other visual Python data scien
 
 ## Conclusion
 
-**Orange Data Mining** is a Simulink-like framework for Python data science projects, featuring a visual workflow interface and a distinctive orange/yellow icon, making it an excellent choice for visual data analysis and machine learning workflows.
+**Orange Data Mining** is a Simulink-like framework for Python data science projects. 
+It features a visual workflow interface and a distinctive orange/yellow icon, making it an 
+excellent choice for visual data analysis and machine learning workflows.
